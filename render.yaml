@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: campus-lost-and-found
+    env: node
+    plan: free
+    buildCommand: npm install && npx prisma db push && node scripts/init-db.mjs && npm run build
+    startCommand: npm start
+    envVars:
+      - key: DATABASE_URL
+        value: "file:./dev.db"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ALLOWED_CAMPUS_DOMAINS
+        value: "campus.edu,university.edu,college.edu,student.edu,gmail.com"
+      - key: NEXT_PUBLIC_APP_NAME
+        value: "CampusFind - University Lost & Found"
+      - key: NEXT_PUBLIC_CAMPUS_NAME
+        value: "University Campus Central"
+      - key: NODE_ENV
+        value: "production"

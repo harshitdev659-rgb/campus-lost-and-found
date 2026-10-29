@@ -1,0 +1,188 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                String             @id @default(uuid())
+  name              String
+  email             String             @unique
+  studentId         String?
+  collegeDomain     String             @default("campus.edu")
+  passwordHash      String
+  role              String             @default("STUDENT") // STUDENT, STAFF, ADMIN
+  isVerified        Boolean            @default(true)
+  verificationToken String?
+  avatarUrl         String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  reports           Report[]
+  claims            Claim[]
+  messages          ClaimMessage[]
+  notifications     Notification[]
+  savedListings     SavedListing[]
+  moderationReports ModerationReport[]
+  auditLogs         AuditEvent[]
+}
+
+model Report {
+  id                     String                 @id @default(uuid())
+  type                   String                 // "LOST" | "FOUND"
+  title                  String
+  description            String
+  category               String                 // Electronics, ID Cards, Books and Notes, Bags, Stationery, Clothing, Accessories, Keys, Bottles, Lab Equipment, Other
+  dateEvent              DateTime               // Date item was lost or found
+  campusLocation         String                 // e.g. Central Library, Engineering Block A
+  building               String?
+  block                  String?
+  floor                  String?
+  room                   String?
+  coordinates            String?                // e.g. "37.4275,-122.1697"
+  imageUrl               String?
+  isDraft                Boolean                @default(false)
+  status                 String                 @default("ACTIVE") // ACTIVE, PENDING_VERIFICATION, CLAIMED, RESOLVED, CLOSED, HIDDEN
+  contactPreference      String                 @default("IN_APP") // IN_APP, EMAIL_ANONYMIZED
+  distinguishingFeatures String?                // Confidential features known only to owner/finder
+  userId                 String
+  user                   User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  verificationQuestions  VerificationQuestion[]
+  claims                 Claim[]
+  savedBy                SavedListing[]
+  moderationReports      ModerationReport[]
+  
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+
+  @@index([status, type, category])
+  @@index([userId])
+}
+
+model VerificationQuestion {
+  id                 String          @id @default(uuid())
+  reportId           String
+  report             Report          @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  questionText       String
+  answerType         String          @default("TEXT") // TEXT, SERIAL_NUMBER, FEATURE_SELECTION
+  expectedAnswerHash String?         // bcrypt hash of correct answer if exact comparison is used
+  hint               String?
+  isRequired         Boolean         @default(true)
+  orderIndex         Int             @default(0)
+  responses          ClaimResponse[]
+  createdAt          DateTime        @default(now())
+
+  @@index([reportId])
+}
+
+model Claim {
+  id                  String          @id @default(uuid())
+  reportId            String
+  report              Report          @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  claimantId          String
+  claimant            User            @relation(fields: [claimantId], references: [id], onDelete: Cascade)
+  status              String          @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED, CANCELLED, COMPLETED
+  claimantNotes       String
+  proofImageUrl       String?
+  attemptCount        Int             @default(1)
+  
+  handoverLocation    String?
+  handoverTime        DateTime?
+  handoverNotes       String?
+  handoverCompletedAt DateTime?
+  reviewerNotes       String?
+  
+  responses           ClaimResponse[]
+  messages            ClaimMessage[]
+  
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@index([reportId])
+  @@index([claimantId])
+  @@index([status])
+}
+
+model ClaimResponse {
+  id              String               @id @default(uuid())
+  claimId         String
+  claim           Claim                @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  questionId      String
+  question        VerificationQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  submittedAnswer String
+  isVerifiedMatch Boolean              @default(false)
+  createdAt       DateTime             @default(now())
+
+  @@index([claimId])
+}
+
+model ClaimMessage {
+  id        String   @id @default(uuid())
+  claimId   String
+  claim     Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([claimId])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // CLAIM_SUBMITTED, CLAIM_STATUS_UPDATED, NEW_MESSAGE, HANDOVER_SCHEDULED, HANDOVER_COMPLETED, REPORT_MODERATED
+  title     String
+  message   String
+  linkUrl   String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+model SavedListing {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reportId  String
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, reportId])
+}
+
+model ModerationReport {
+  id         String   @id @default(uuid())
+  reportId   String
+  report     Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reporterId String
+  reporter   User     @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+  reason     String
+  details    String?
+  status     String   @default("PENDING") // PENDING, REVIEWED, DISMISSED
+  createdAt  DateTime @default(now())
+
+  @@index([status])
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String   // e.g. "USER_LOGIN", "CLAIM_APPROVED", "REPORT_MODERATED", "HANDOVER_CONFIRMED"
+  targetType String   // "USER", "REPORT", "CLAIM"
+  targetId   String?
+  metadata   String?  // Sanitized JSON string
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([action])
+  @@index([targetType, targetId])
+}
