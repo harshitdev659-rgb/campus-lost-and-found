@@ -42,3 +42,4 @@ dev.db
 dev.db-journal
 uploads/*
 !uploads/.gitkeep
+cloudflared.exe
