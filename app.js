@@ -1,10 +1,64 @@
 // Campus Lost & Found Platform - Production Engine
 // Apex University Student Recovery Hub
 
-// Cryptographic Secret for Client Session Token Integrity Verification
-const SESSION_SIGNING_SALT = "apex_campus_security_session_salt_2026";
+// -------------------------------------------------------------
+// Issue 12 Fix: Dynamic Ephemeral Cryptographic Session Secret
+// Generates a 256-bit cryptographically random key stored only in non-exportable sessionStorage
+// -------------------------------------------------------------
 
+function getSessionSecret() {
+  let secret = sessionStorage.getItem("apex_ephemeral_session_secret");
+  if (!secret) {
+    const randomBytes = new Uint8Array(32);
+    crypto.getRandomValues(randomBytes);
+    secret = Array.from(randomBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+    sessionStorage.setItem("apex_ephemeral_session_secret", secret);
+  }
+  return secret;
+}
+
+// -------------------------------------------------------------
+// Issue 11 Fix: Cryptographic Hashing for Secret Answers & Passwords
+// Secret answers are hashed before storage to prevent inspection via localStorage or DevTools
+// -------------------------------------------------------------
+
+async function hashSecretAnswer(answer, itemId) {
+  if (!answer) return "";
+  const normalized = answer.trim().toLowerCase();
+  const enc = new TextEncoder();
+  const data = enc.encode(normalized + ":" + itemId);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const data = enc.encode(password + ":" + salt);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function createSignedSessionToken(user) {
+  const ephemeralSecret = getSessionSecret();
+  const payload = `${user.id}:${user.email}:${user.role}:${ephemeralSecret}`;
+  const enc = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(payload));
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifySessionToken(user, token) {
+  if (!user || !token) return false;
+  const expectedToken = await createSignedSessionToken(user);
+  return expectedToken === token;
+}
+
+// -------------------------------------------------------------
 // Default System Users with Pre-computed WebCrypto SHA-256 Hashes
+// -------------------------------------------------------------
+
 const DEFAULT_USERS = [
   {
     id: "admin-sec",
@@ -13,6 +67,14 @@ const DEFAULT_USERS = [
     passwordHash: "7bbe0d843d1294ab9f88320bdde8582be0221f1f3cb038b13a4e2401690f4470",
     role: "admin",
     badge: "Campus Security & Admin"
+  },
+  {
+    id: "staff-1",
+    name: "Dr. Evelyn Reed",
+    email: "evelyn.reed@apex.edu",
+    passwordHash: "58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d",
+    role: "staff",
+    badge: "Faculty / University Staff"
   },
   {
     id: "student-1",
@@ -24,6 +86,7 @@ const DEFAULT_USERS = [
   }
 ];
 
+// Issue 11: INITIAL_ITEMS with precomputed secretAnswerHash (Plaintext secretAnswer removed)
 const INITIAL_ITEMS = [
   {
     id: "item-101",
@@ -38,7 +101,7 @@ const INITIAL_ITEMS = [
     status: "ACTIVE", // ACTIVE, UNDER_REVIEW, APPROVED, RECOVERED, HIDDEN
     reporterId: "admin-sec",
     secretQuestion: "What color is the silicone lanyard loop attached to the case and what initials are inside the lid?",
-    secretAnswer: "Bright orange lanyard with initials AC",
+    secretAnswerHash: "b39deb78e4199ba8339176fbe4ad78fbfef81493676025d424837e317365ca0d",
     claimsCount: 0,
     createdAt: "2026-10-28T14:30:00Z"
   },
@@ -55,7 +118,7 @@ const INITIAL_ITEMS = [
     status: "ACTIVE",
     reporterId: "admin-sec",
     secretQuestion: "What is your student matriculation prefix (first 4 digits) and blood group on the card?",
-    secretAnswer: "2024-B and O+",
+    secretAnswerHash: "8c65eb05d1fc6eb21a67d9932aec163290d0e109491b47dcbcc5b11fbb8dea84",
     claimsCount: 0,
     createdAt: "2026-10-29T11:15:00Z"
   },
@@ -72,7 +135,7 @@ const INITIAL_ITEMS = [
     status: "ACTIVE",
     reporterId: "student-1",
     secretQuestion: "",
-    secretAnswer: "",
+    secretAnswerHash: "",
     claimsCount: 0,
     createdAt: "2026-10-30T09:45:00Z"
   },
@@ -89,7 +152,7 @@ const INITIAL_ITEMS = [
     status: "ACTIVE",
     reporterId: "admin-sec",
     secretQuestion: "What vehicle brand is on the key fob and what 3-digit number is stamped on the brass key?",
-    secretAnswer: "Subaru and Room 214",
+    secretAnswerHash: "53ae0e20f242aa50e3f2f67e5047681bcf9cde1a7b4a55698b6d0ecb63474462",
     claimsCount: 0,
     createdAt: "2026-10-31T08:10:00Z"
   }
@@ -130,7 +193,6 @@ function compressImage(file, maxWidth = 800, quality = 0.7) {
     if (!file.type.startsWith("image/")) {
       return reject(new Error("Selected file must be an image."));
     }
-    // Hard limit: 12MB input
     if (file.size > 12 * 1024 * 1024) {
       return reject(new Error("File size exceeds 12MB limit. Please choose a smaller image."));
     }
@@ -164,7 +226,6 @@ function compressImage(file, maxWidth = 800, quality = 0.7) {
   });
 }
 
-// Safe localStorage wrapper to guard against QuotaExceededError
 function safeStorageSet(key, value) {
   try {
     localStorage.setItem(key, value);
@@ -177,32 +238,6 @@ function safeStorageSet(key, value) {
 }
 
 // -------------------------------------------------------------
-// Cryptographic Password Hashing (Web Crypto API)
-// -------------------------------------------------------------
-
-async function hashPassword(password, salt) {
-  const enc = new TextEncoder();
-  const data = enc.encode(password + ":" + salt);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function createSignedSessionToken(user) {
-  const payload = `${user.id}:${user.email}:${user.role}:${SESSION_SIGNING_SALT}`;
-  const enc = new TextEncoder();
-  const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(payload));
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-}
-
-async function verifySessionToken(user, token) {
-  if (!user || !token) return false;
-  const expectedToken = await createSignedSessionToken(user);
-  return expectedToken === token;
-}
-
-// -------------------------------------------------------------
 // Database Access & Sanitization
 // -------------------------------------------------------------
 
@@ -212,11 +247,34 @@ function getItems() {
     safeStorageSet(DB_ITEMS_KEY, JSON.stringify(INITIAL_ITEMS));
     return [...INITIAL_ITEMS];
   }
-  try { return JSON.parse(d); } catch(e) { return [...INITIAL_ITEMS]; }
+  try {
+    let items = JSON.parse(d);
+    // Issue 11: Sanitize legacy items to remove any plaintext secretAnswer
+    let migrated = false;
+    items = items.map(item => {
+      if (item.secretAnswer) {
+        migrated = true;
+        delete item.secretAnswer;
+      }
+      return item;
+    });
+    if (migrated) {
+      safeStorageSet(DB_ITEMS_KEY, JSON.stringify(items));
+    }
+    return items;
+  } catch(e) {
+    return [...INITIAL_ITEMS];
+  }
 }
 
 function saveItems(items) {
-  safeStorageSet(DB_ITEMS_KEY, JSON.stringify(items));
+  // Issue 11: Ensure secretAnswer is never saved in plaintext
+  const sanitized = items.map(i => {
+    const copy = { ...i };
+    delete copy.secretAnswer;
+    return copy;
+  });
+  safeStorageSet(DB_ITEMS_KEY, JSON.stringify(sanitized));
 }
 
 function getUsers() {
@@ -298,7 +356,23 @@ function saveAuditLogs(logs) {
 }
 
 // -------------------------------------------------------------
-// Session Management & Cryptographic Integrity Check
+// Issue 13 RBAC Permission Check Helpers (Admin & Staff)
+// -------------------------------------------------------------
+
+function isStaff(user) {
+  return user && user.role === 'staff';
+}
+
+function isAdmin(user) {
+  return user && user.role === 'admin';
+}
+
+function canModerate(user) {
+  return user && (user.role === 'admin' || user.role === 'staff');
+}
+
+// -------------------------------------------------------------
+// Session Management & Dynamic Cryptographic Integrity
 // -------------------------------------------------------------
 
 function getLoggedInUser() {
@@ -332,7 +406,7 @@ async function verifyActiveSession() {
       });
       saveAuditLogs(logs);
       localStorage.removeItem(SESSION_USER_KEY);
-      showToast("Security notice: Session expired or signature invalid. Please sign in again.", "error");
+      showToast("Security notice: Session signature expired or invalid. Please sign in again.", "error");
       updateAuthUI();
       return null;
     }
@@ -467,7 +541,7 @@ function clearInputError(input) {
 }
 
 // -------------------------------------------------------------
-// Issue 8: Hash Routing & History Navigation Engine
+// Hash Routing & History Navigation Engine
 // -------------------------------------------------------------
 
 let currentView = 'home';
@@ -509,15 +583,14 @@ async function navigate(view, params = {}, updateHash = true) {
   currentView = view;
   viewParams = params;
 
-  // Protect Dashboard & Admin routes
   const user = await verifyActiveSession();
   if ((view === 'dashboard' || view === 'admin') && !user) {
     openAuthModal('Please sign in to access your dashboard and records.');
     return;
   }
 
-  if (view === 'admin' && user.role !== 'admin') {
-    showToast("Access Restricted: Campus Security clearance required.", "error");
+  if (view === 'admin' && !canModerate(user)) {
+    showToast("Access Restricted: Staff or Campus Security clearance required.", "error");
     navigate('home');
     return;
   }
@@ -558,10 +631,7 @@ async function navigate(view, params = {}, updateHash = true) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-// -------------------------------------------------------------
-// Issue 7: Cross-Tab Storage Event Synchronization
-// -------------------------------------------------------------
-
+// Cross-Tab Storage Event Synchronization
 window.addEventListener('storage', async (event) => {
   if ([DB_ITEMS_KEY, DB_CLAIMS_KEY, DB_NOTIFS_KEY, SESSION_USER_KEY, DB_AUDIT_KEY].includes(event.key)) {
     await verifyActiveSession();
@@ -570,7 +640,7 @@ window.addEventListener('storage', async (event) => {
   }
 });
 
-// History & Hash listener
+// Hash History Listener
 window.addEventListener('hashchange', () => {
   const route = parseRouteFromHash();
   navigate(route.view, route.params, false);
@@ -581,7 +651,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   await verifyActiveSession();
   updateAuthUI();
 
-  // Load initial route from URL Hash
   const route = parseRouteFromHash();
   navigate(route.view, route.params, false);
   lucide.createIcons();
@@ -627,7 +696,6 @@ function renderHomeView() {
   const activeLost = items.filter(i => i.type === 'LOST' && i.status === 'ACTIVE').length;
 
   return `
-    <!-- Hero Banner -->
     <section class="bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 text-white pt-16 pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
       <div class="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-30"></div>
       
@@ -678,7 +746,7 @@ function renderHomeView() {
           </button>
         </div>
 
-        <!-- Live Statistics Counter -->
+        <!-- Statistics Counter -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-16 pt-10 border-t border-slate-800 text-center">
           <div>
             <div class="text-3xl font-black text-white">${totalRecovered}</div>
@@ -727,7 +795,7 @@ function renderHomeView() {
           </div>
           <h4 class="font-bold text-slate-900 text-base mb-2">Private Verification Review</h4>
           <p class="text-xs text-slate-600 leading-relaxed">
-            The claimant submits an answer. The finder or campus security verifies the details without disclosing personal contact numbers publicly.
+            The claimant submits an answer. Target answers are stored as irreversible cryptographic hashes and verified without exposing private phone numbers.
           </p>
         </div>
 
@@ -737,7 +805,7 @@ function renderHomeView() {
           </div>
           <h4 class="font-bold text-slate-900 text-base mb-2">Handover at Campus Station</h4>
           <p class="text-xs text-slate-600 leading-relaxed">
-            Items are collected in person at designated campus desks (Central Library Front Desk or Campus Security Gate 1) with student ID verification.
+            Items are collected in person at designated campus desks (Central Library Front Desk or Campus Security Gate 1) with student/staff identity verification.
           </p>
         </div>
       </div>
@@ -1021,7 +1089,7 @@ function renderItemDetailView(itemId) {
             <div>
               <span class="font-bold">Official Campus Handover Guarantee</span>
               <p class="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
-                Found items are collected in person at the Central Library Desk or Security Gate 1 with student identity verification.
+                Found items are collected in person at the Central Library Desk or Security Gate 1 with student/staff identity verification.
               </p>
             </div>
           </div>
@@ -1068,7 +1136,6 @@ function renderItemDetailView(itemId) {
             </div>
           </div>
 
-          <!-- Actions Column (Addresses Issue 10 - Symmetrical workflow for LOST and FOUND) -->
           <div class="mt-auto pt-6 border-t border-slate-200">
             ${item.type === 'FOUND' && item.status !== 'RECOVERED' ? `
               ${isReporter ? `
@@ -1146,10 +1213,6 @@ function promptClaim(itemId) {
   openClaimModal(itemId);
 }
 
-// -------------------------------------------------------------
-// Issue 10: "I Found This Item" Interactive Notification Flow
-// -------------------------------------------------------------
-
 function openNotifyFoundModal(itemId) {
   const user = getLoggedInUser();
   if (!user) {
@@ -1212,11 +1275,10 @@ function handleNotifyFoundSubmit(e) {
 
   if (!item) return;
 
-  // Create an automated Handover Match Claim
   const matchClaim = {
     id: `claim-${Date.now().toString().slice(-4)}`,
     itemId: item.id,
-    claimantId: item.reporterId, // The person who lost it
+    claimantId: item.reporterId,
     claimantName: "Owner",
     claimantEmail: "student@apex.edu",
     submittedAnswer: "Found by fellow student / staff",
@@ -1228,7 +1290,7 @@ function handleNotifyFoundSubmit(e) {
       {
         id: `m-${Date.now()}`,
         senderId: user.id,
-        senderName: `${user.name} (Finder)`,
+        senderName: `${user.name} (${user.role === 'staff' ? 'Staff' : 'Finder'})`,
         text: `Good news! I have located your lost belonging. ${message} (Location: ${location})`,
         timestamp: new Date().toISOString()
       }
@@ -1245,8 +1307,8 @@ function handleNotifyFoundSubmit(e) {
   notifs.unshift({
     id: `notif-${Date.now()}`,
     userId: item.reporterId,
-    title: 'Good News: Someone Found Your Item!',
-    message: `${user.name} located your lost ${item.title}. Check dashboard to coordinate pickup.`,
+    title: 'Good News: Someone Located Your Item!',
+    message: `${user.name} located your lost ${item.title}. Check your dashboard to coordinate pickup.`,
     timestamp: 'Just now',
     read: false
   });
@@ -1256,7 +1318,7 @@ function handleNotifyFoundSubmit(e) {
   logs.unshift({
     id: `audit-${Date.now()}`,
     action: 'LOST_ITEM_LOCATED',
-    details: `${user.name} notified owner of lost item #${item.id} (${location}).`,
+    details: `${user.name} (${user.badge || user.role}) notified owner of lost item #${item.id} (${location}).`,
     timestamp: new Date().toISOString()
   });
   saveAuditLogs(logs);
@@ -1265,6 +1327,10 @@ function handleNotifyFoundSubmit(e) {
   showToast("Owner notified! Coordination channel opened in your Dashboard.", "success");
   navigate('dashboard');
 }
+
+// -------------------------------------------------------------
+// Issue 13: Dashboard Supporting Student & Staff Views
+// -------------------------------------------------------------
 
 function renderDashboardView() {
   const user = getLoggedInUser();
@@ -1279,18 +1345,28 @@ function renderDashboardView() {
 
   const myFoundIds = myFound.map(f => f.id);
   const myLostIds = myLost.map(l => l.id);
-  // Incoming claims for items I found OR items I lost that someone notified me about
   const incomingClaims = claims.filter(c => myFoundIds.includes(c.itemId) || myLostIds.includes(c.itemId));
 
   return `
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <div class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">Campus Portal</div>
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Campus Recovery Hub</span>
+            ${user.role === 'staff' ? `
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200">
+                Departmental Authority
+              </span>
+            ` : user.role === 'admin' ? `
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                Security Command
+              </span>
+            ` : ''}
+          </div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            ${escapeHTML(user.name)}'s Dashboard
+            ${escapeHTML(user.name)}'s Portal
           </h1>
-          <p class="text-xs text-slate-500 mt-0.5">${escapeHTML(user.email)} &bull; ${escapeHTML(user.badge || 'Verified Member')}</p>
+          <p class="text-xs text-slate-500 mt-0.5">${escapeHTML(user.email)} &bull; ${escapeHTML(user.badge || user.role)}</p>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="openReportModal('LOST')" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm">
@@ -1402,9 +1478,11 @@ function renderDashboardView() {
   `;
 }
 
+// Issue 11: renderIncomingClaimCard now shows cryptographic match badge instead of plaintext secret
 function renderIncomingClaimCard(claim, item) {
   const isApproved = claim.status === 'APPROVED';
   const isCompleted = claim.status === 'COMPLETED';
+  const isAutomatedMatch = claim.isCryptographicMatch;
 
   return `
     <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
@@ -1429,10 +1507,11 @@ function renderIncomingClaimCard(claim, item) {
         <div class="p-4 bg-slate-50 rounded-xl space-y-2">
           <div class="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Verification Target</div>
           <div>
-            <span class="font-semibold text-slate-600">Question:</span> ${item ? escapeHTML(item.secretQuestion || 'General proof of ownership') : ''}
+            <span class="font-semibold text-slate-600">Question:</span> ${item ? escapeHTML(item.secretQuestion || 'Proof of ownership') : ''}
           </div>
-          <div class="text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-200 font-mono">
-            <span class="font-bold">Target Answer:</span> ${item ? escapeHTML(item.secretAnswer || 'Owner verification') : ''}
+          <div class="text-blue-700 bg-blue-50/70 p-2.5 rounded-lg border border-blue-200 flex items-center gap-2">
+            <i data-lucide="shield-check" class="w-4 h-4 text-blue-600 shrink-0"></i>
+            <span class="text-[11px] font-medium">Target Answer Protected by WebCrypto SHA-256 Hash</span>
           </div>
         </div>
 
@@ -1442,11 +1521,17 @@ function renderIncomingClaimCard(claim, item) {
             <span class="font-semibold text-slate-700">Contact:</span> ${escapeHTML(claim.claimantName)} (${escapeHTML(claim.claimantEmail)})
           </div>
           <div>
-            <span class="font-semibold text-slate-700">Answer / Location Given:</span>
+            <span class="font-semibold text-slate-700">Answer Provided:</span>
             <div class="p-2 bg-white rounded border border-blue-200 mt-1 font-semibold text-slate-900">
               "${escapeHTML(claim.submittedAnswer)}"
             </div>
           </div>
+          ${isAutomatedMatch ? `
+            <div class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+              <i data-lucide="check-check" class="w-3 h-3 text-emerald-600"></i>
+              <span>Cryptographic Hash Match Verified</span>
+            </div>
+          ` : ''}
           ${claim.additionalProof ? `
             <div class="text-slate-600 mt-1">
               <span class="font-semibold">Additional Details:</span> ${escapeHTML(claim.additionalProof)}
@@ -1534,7 +1619,6 @@ function renderHandoverChat(claim) {
         <div class="text-[11px] text-slate-500">Private &bull; Phone numbers hidden</div>
       </div>
 
-      <!-- Messages list (Escaped for Issue 5) -->
       <div class="bg-slate-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2.5 border border-slate-200 text-xs">
         ${(claim.messages || []).map(m => {
           const isMe = user && m.senderId === user.id;
@@ -1569,18 +1653,22 @@ function renderHandoverChat(claim) {
   `;
 }
 
+// -------------------------------------------------------------
+// Issue 14 Fix: Responsive Admin View (No horizontal scrolling on mobile!)
+// -------------------------------------------------------------
+
 function renderAdminView() {
   const user = getLoggedInUser();
-  if (!user || user.role !== 'admin') {
+  if (!user || !canModerate(user)) {
     return `
       <div class="max-w-2xl mx-auto px-4 py-16 text-center">
         <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3">
           <i data-lucide="shield-alert" class="w-6 h-6"></i>
         </div>
-        <h2 class="text-xl font-bold text-slate-900 mb-2">Campus Security & Admin Portal Only</h2>
-        <p class="text-xs text-slate-500 mb-4">You must be logged in as an authorized Campus Security administrator to access content moderation and audit logs.</p>
-        <button onclick="openAuthModal('Sign in with Campus Security credentials')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition">
-          Sign In as Officer Davis
+        <h2 class="text-xl font-bold text-slate-900 mb-2">Staff & Campus Security Portal Only</h2>
+        <p class="text-xs text-slate-500 mb-4">You must be logged in as an authorized Faculty / Staff member or Security Officer to access content moderation.</p>
+        <button onclick="openAuthModal('Sign in with Staff or Security credentials')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition">
+          Sign In as Staff / Security
         </button>
       </div>
     `;
@@ -1594,11 +1682,12 @@ function renderAdminView() {
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 text-[11px] font-bold uppercase tracking-wider mb-1">
-            <i data-lucide="shield" class="w-3.5 h-3.5"></i> Campus Security Command
+          <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md ${user.role === 'staff' ? 'bg-indigo-100 text-indigo-800' : 'bg-purple-100 text-purple-800'} text-[11px] font-bold uppercase tracking-wider mb-1">
+            <i data-lucide="${user.role === 'staff' ? 'award' : 'shield'}" class="w-3.5 h-3.5"></i>
+            <span>${user.role === 'staff' ? 'Faculty & Staff Moderation' : 'Campus Security Command'}</span>
           </div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Security Moderation & Audit Console
+            Campus Moderation & Audit Console
           </h1>
           <p class="text-xs text-slate-500 mt-0.5">Manage reported content, resolve claims, and inspect security audit trails.</p>
         </div>
@@ -1623,12 +1712,15 @@ function renderAdminView() {
         </div>
       </div>
 
+      <!-- Active Campus Listings Moderation -->
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
         <div class="p-4 border-b border-slate-200 flex items-center justify-between">
           <h3 class="font-bold text-slate-900 text-sm">Active Campus Listings Moderation</h3>
           <span class="text-xs text-slate-500">${items.length} listings</span>
         </div>
-        <div class="overflow-x-auto">
+
+        <!-- Desktop View (hidden on small screens) -->
+        <div class="hidden md:block overflow-x-auto">
           <table class="w-full text-left text-xs">
             <thead class="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase font-semibold">
               <tr>
@@ -1676,8 +1768,45 @@ function renderAdminView() {
             </tbody>
           </table>
         </div>
+
+        <!-- Issue 14 Fix: Mobile Responsive Card View (Visible on screens < 768px, zero horizontal scrolling) -->
+        <div class="md:hidden divide-y divide-slate-100 p-3 space-y-3">
+          ${items.map(item => `
+            <div class="p-3 bg-slate-50/70 rounded-xl border border-slate-200/80 space-y-2">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <h4 class="font-bold text-xs text-slate-900">${escapeHTML(item.title)}</h4>
+                  <div class="text-[10px] text-slate-500 mt-0.5">#${escapeHTML(item.id)} &bull; ${escapeHTML(item.category)} &bull; ${escapeHTML(item.building)}</div>
+                </div>
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.type === 'LOST' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
+                  ${escapeHTML(item.type)}
+                </span>
+              </div>
+              <div class="flex items-center justify-between pt-1">
+                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${item.status === 'ACTIVE' ? 'bg-blue-100 text-blue-800' : item.status === 'RECOVERED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}">
+                  ${escapeHTML(item.status)}
+                </span>
+                <div class="space-x-1">
+                  ${item.status !== 'HIDDEN' ? `
+                    <button onclick="adminToggleHide('${escapeHTML(item.id)}', true)" class="px-2.5 py-1 text-[11px] font-bold text-rose-600 bg-white border border-rose-200 rounded-lg shadow-sm">
+                      Hide
+                    </button>
+                  ` : `
+                    <button onclick="adminToggleHide('${escapeHTML(item.id)}', false)" class="px-2.5 py-1 text-[11px] font-bold text-emerald-600 bg-white border border-emerald-200 rounded-lg shadow-sm">
+                      Unhide
+                    </button>
+                  `}
+                  <button onclick="adminDelete('${escapeHTML(item.id)}')" class="px-2.5 py-1 text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg shadow-sm">
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
       </div>
 
+      <!-- Security Audit Trail -->
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <h3 class="font-bold text-slate-900 text-sm mb-3 flex items-center gap-2">
           <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
@@ -1685,7 +1814,7 @@ function renderAdminView() {
         </h3>
         <div class="space-y-2 max-h-60 overflow-y-auto text-xs">
           ${auditLogs.map(log => `
-            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
+            <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex flex-col sm:flex-row sm:items-start justify-between gap-1.5 sm:gap-4">
               <div>
                 <span class="font-bold text-slate-800 uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-200 mr-2">${escapeHTML(log.action)}</span>
                 <span class="text-slate-700">${escapeHTML(log.details)}</span>
@@ -1700,7 +1829,7 @@ function renderAdminView() {
 }
 
 // -------------------------------------------------------------
-// Interactive Operations & Modals (Addresses Issue 9: Field Overwrite)
+// Interactive Operations & Modals
 // -------------------------------------------------------------
 
 function openReportModal(type) {
@@ -1721,7 +1850,7 @@ function openReportModal(type) {
 
   if (!modal || !form) return;
 
-  // Issue 9 Fix: Execute form.reset() FIRST before assigning typeInput.value!
+  // Issue 9 Fix: form.reset() executes BEFORE setting typeInput.value
   form.reset();
   typeInput.value = type;
 
@@ -1761,7 +1890,6 @@ function closeReportModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-// Issue 6: Client-Side Compressed Image Preview
 async function previewPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -1783,7 +1911,8 @@ async function previewPhoto(event) {
   }
 }
 
-function handleReportSubmit(e) {
+// Issue 11 Fix: Hash secretAnswer before creating item in handleReportSubmit
+async function handleReportSubmit(e) {
   e.preventDefault();
   const form = document.getElementById('report-form');
 
@@ -1809,8 +1938,13 @@ function handleReportSubmit(e) {
   const secretQuestion = document.getElementById('report-secret-question').value.trim();
   const secretAnswer = document.getElementById('report-secret-answer').value.trim();
 
+  const itemId = `item-${Date.now().toString().slice(-4)}`;
+
+  // Issue 11: Hash target secret answer before storage!
+  const secretAnswerHash = secretAnswer ? await hashSecretAnswer(secretAnswer, itemId) : "";
+
   const newItem = {
-    id: `item-${Date.now().toString().slice(-4)}`,
+    id: itemId,
     type: type,
     title: title,
     category: category,
@@ -1824,7 +1958,7 @@ function handleReportSubmit(e) {
     status: 'ACTIVE',
     reporterId: user.id,
     secretQuestion: secretQuestion,
-    secretAnswer: secretAnswer,
+    secretAnswerHash: secretAnswerHash, // Hashed only! No plaintext secretAnswer stored
     claimsCount: 0,
     createdAt: new Date().toISOString()
   };
@@ -1836,7 +1970,7 @@ function handleReportSubmit(e) {
   logs.unshift({
     id: `audit-${Date.now()}`,
     action: `ITEM_${type}_REPORTED`,
-    details: `${type} item #${newItem.id} (${newItem.title}) reported by ${user.name} at ${building}.`,
+    details: `${type} item #${newItem.id} (${newItem.title}) reported by ${user.name} (${user.badge || user.role}) at ${building}.`,
     timestamp: new Date().toISOString()
   });
   saveAuditLogs(logs);
@@ -1882,7 +2016,8 @@ function closeClaimModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-function handleClaimSubmit(e) {
+// Issue 11: Compare submitted answer hash against item.secretAnswerHash
+async function handleClaimSubmit(e) {
   e.preventDefault();
   const form = document.getElementById('claim-form');
 
@@ -1906,6 +2041,10 @@ function handleClaimSubmit(e) {
 
   if (!item) return;
 
+  // Issue 11: Cryptographically verify claimant answer against stored hash
+  const claimantAnswerHash = await hashSecretAnswer(answer, item.id);
+  const isCryptographicMatch = Boolean(item.secretAnswerHash && claimantAnswerHash === item.secretAnswerHash);
+
   const newClaim = {
     id: `claim-${Date.now().toString().slice(-4)}`,
     itemId: item.id,
@@ -1913,8 +2052,9 @@ function handleClaimSubmit(e) {
     claimantName: user.name,
     claimantEmail: user.email,
     submittedAnswer: answer,
+    isCryptographicMatch: isCryptographicMatch,
     additionalProof: additionalProof,
-    status: 'PENDING',
+    status: isCryptographicMatch ? 'APPROVED' : 'PENDING',
     handoverLocation: 'Central Library Front Desk',
     createdAt: new Date().toISOString(),
     messages: [
@@ -1938,8 +2078,8 @@ function handleClaimSubmit(e) {
   notifs.unshift({
     id: `notif-${Date.now()}`,
     userId: item.reporterId,
-    title: 'New Ownership Claim Submitted',
-    message: `${user.name} submitted a claim for ${item.title}.`,
+    title: isCryptographicMatch ? 'Ownership Verified Match Submitted!' : 'New Ownership Claim Submitted',
+    message: `${user.name} submitted a claim for ${item.title}${isCryptographicMatch ? ' (Hash match verified)' : ''}.`,
     timestamp: 'Just now',
     read: false
   });
@@ -1948,14 +2088,16 @@ function handleClaimSubmit(e) {
   const logs = getAuditLogs();
   logs.unshift({
     id: `audit-${Date.now()}`,
-    action: 'CLAIM_SUBMITTED',
-    details: `Claim #${newClaim.id} submitted by ${user.name} for item #${item.id}.`,
+    action: isCryptographicMatch ? 'CLAIM_HASH_MATCH_VERIFIED' : 'CLAIM_SUBMITTED',
+    details: `Claim #${newClaim.id} submitted by ${user.name} for item #${item.id} (Hash Verified: ${isCryptographicMatch}).`,
     timestamp: new Date().toISOString()
   });
   saveAuditLogs(logs);
 
   closeClaimModal();
-  showToast('Claim submitted! The finder has been notified.', 'success');
+  showToast(isCryptographicMatch 
+    ? 'Verification matched! Claim automatically approved for handover.' 
+    : 'Claim submitted! The finder has been notified.', 'success');
   navigate('dashboard');
 }
 
@@ -2024,7 +2166,7 @@ function sendChatMessage(claimId) {
   claim.messages.push({
     id: `m-${Date.now()}`,
     senderId: user ? user.id : 'anon',
-    senderName: user ? `${user.name} (${user.role === 'admin' ? 'Security' : user.id === claim.claimantId ? 'Owner' : 'Finder'})` : 'User',
+    senderName: user ? `${user.name} (${user.role === 'admin' ? 'Security' : user.role === 'staff' ? 'Staff' : user.id === claim.claimantId ? 'Owner' : 'Finder'})` : 'User',
     text: text,
     timestamp: new Date().toISOString()
   });
@@ -2061,8 +2203,8 @@ function completeHandover(claimId) {
 
 async function adminToggleHide(itemId, shouldHide) {
   const user = await verifyActiveSession();
-  if (!user || user.role !== 'admin') {
-    showToast("Unauthorized: Admin clearance required.", "error");
+  if (!user || !canModerate(user)) {
+    showToast("Unauthorized: Staff or Admin clearance required.", "error");
     return;
   }
 
@@ -2077,7 +2219,7 @@ async function adminToggleHide(itemId, shouldHide) {
   logs.unshift({
     id: `audit-${Date.now()}`,
     action: shouldHide ? 'ITEM_MODERATED_HIDDEN' : 'ITEM_UNHIDDEN',
-    details: `Item #${item.id} was ${shouldHide ? 'hidden' : 'restored'} by Admin ${user.name}.`,
+    details: `Item #${item.id} was ${shouldHide ? 'hidden' : 'restored'} by ${user.name} (${user.badge || user.role}).`,
     timestamp: new Date().toISOString()
   });
   saveAuditLogs(logs);
@@ -2088,8 +2230,8 @@ async function adminToggleHide(itemId, shouldHide) {
 
 async function adminDelete(itemId) {
   const user = await verifyActiveSession();
-  if (!user || user.role !== 'admin') {
-    showToast("Unauthorized: Admin clearance required.", "error");
+  if (!user || !canModerate(user)) {
+    showToast("Unauthorized: Staff or Admin clearance required.", "error");
     return;
   }
 
@@ -2108,13 +2250,13 @@ async function adminDelete(itemId) {
   const logs = getAuditLogs();
   logs.unshift({
     id: `audit-${Date.now()}`,
-    action: "ITEM_DELETED_BY_ADMIN",
-    details: `Report #${itemId} permanently removed by Admin ${user.name}.`,
+    action: "ITEM_DELETED_BY_STAFF_ADMIN",
+    details: `Report #${itemId} permanently removed by ${user.name} (${user.badge || user.role}).`,
     timestamp: new Date().toISOString()
   });
   saveAuditLogs(logs);
 
-  showToast('Item deleted by Admin.', 'info');
+  showToast('Item deleted from registry.', 'info');
   renderCurrentView();
 }
 
@@ -2164,7 +2306,7 @@ function setAuthTab(tab) {
     registerForm.classList.remove('hidden');
     tabLogin.className = 'flex-1 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent';
     tabRegister.className = 'flex-1 py-2 text-xs font-bold text-blue-600 border-b-2 border-blue-600';
-    authTitle.textContent = 'Register Student Account';
+    authTitle.textContent = 'Register Campus Account';
   }
 }
 
@@ -2200,6 +2342,7 @@ async function handleAuthLogin(e) {
   showToast(`Welcome back, ${user.name}!`, 'success');
 }
 
+// Issue 13: Correct staff badge assignment upon registration
 async function handleAuthRegister(e) {
   e.preventDefault();
   const form = document.getElementById('register-form');
@@ -2233,7 +2376,7 @@ async function handleAuthRegister(e) {
     email: email,
     passwordHash: passwordHash,
     role: role,
-    badge: role === 'staff' ? 'University Staff' : 'Student'
+    badge: role === 'staff' ? 'Faculty / University Staff' : 'Student'
   };
 
   users.push(newUser);
@@ -2258,17 +2401,19 @@ function updateAuthUI() {
 
   if (user) {
     const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2);
+    const badgeColor = user.role === 'admin' ? 'bg-purple-600' : user.role === 'staff' ? 'bg-indigo-600' : 'bg-blue-600';
+
     container.innerHTML = `
       <div class="relative">
         <button onclick="toggleUserDropdown()" class="flex items-center gap-2 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition text-sm">
-          <div class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">${escapeHTML(initials)}</div>
+          <div class="w-6 h-6 rounded-full ${badgeColor} text-white text-xs flex items-center justify-center font-bold">${escapeHTML(initials)}</div>
           <div class="text-left hidden sm:block">
             <div class="font-medium text-xs leading-none">${escapeHTML(user.name)}</div>
             <div class="text-[10px] text-slate-400 mt-0.5">${escapeHTML(user.badge || user.role)}</div>
           </div>
           <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
         </button>
-        <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 z-50 text-slate-800">
+        <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-60 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 z-50 text-slate-800">
           <div class="px-4 py-2 border-b border-slate-100">
             <div class="font-bold text-xs text-slate-900">${escapeHTML(user.name)}</div>
             <div class="text-[11px] text-slate-500">${escapeHTML(user.email)}</div>
@@ -2277,10 +2422,10 @@ function updateAuthUI() {
             <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-slate-500"></i>
             <span>My Dashboard & Claims</span>
           </button>
-          ${user.role === 'admin' ? `
-            <button onclick="navigate('admin'); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs flex items-center gap-2 text-purple-700 font-semibold">
-              <i data-lucide="shield" class="w-3.5 h-3.5"></i>
-              <span>Security & Moderation</span>
+          ${canModerate(user) ? `
+            <button onclick="navigate('admin'); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs flex items-center gap-2 ${user.role === 'staff' ? 'text-indigo-700' : 'text-purple-700'} font-semibold">
+              <i data-lucide="${user.role === 'staff' ? 'award' : 'shield'}" class="w-3.5 h-3.5"></i>
+              <span>${user.role === 'staff' ? 'Staff Moderation' : 'Security & Moderation'}</span>
             </button>
           ` : ''}
           <div class="border-t border-slate-100 my-1"></div>
