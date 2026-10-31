@@ -1,5 +1,10 @@
 # CampusFind — University Lost & Found Platform
 
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fharshitdev659-rgb%2Fcampus-lost-and-found)
+
+> **Live Website URL**: [https://mentor-unified-pilot-anybody.trycloudflare.com](https://mentor-unified-pilot-anybody.trycloudflare.com)  
+> **GitHub Repository**: [https://github.com/harshitdev659-rgb/campus-lost-and-found](https://github.com/harshitdev659-rgb/campus-lost-and-found)
+
 A complete, production-ready, security-first Campus Lost & Found Platform designed for colleges and universities. Replaces disorganized WhatsApp group chats and bulletin boards with a centralized, searchable, and trustworthy platform with cryptographic ownership verification and safe campus handovers.
 
 ---
