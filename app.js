@@ -1,12 +1,18 @@
 // Campus Lost & Found Platform - Production Engine
 // Apex University Student Recovery Hub
 
+// Cryptographic Secret for Client Session Token Integrity Verification
+const SESSION_SIGNING_SALT = "apex_campus_security_session_salt_2026";
+
+// Default System Users with Pre-computed WebCrypto SHA-256 Hashes
+// security@apex.edu: pass="admin" -> 7bbe0d843d1294ab9f88320bdde8582be0221f1f3cb038b13a4e2401690f4470
+// rachel.a@apex.edu: pass="password123" -> 58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d
 const DEFAULT_USERS = [
   {
     id: "admin-sec",
     name: "Officer Davis",
     email: "security@apex.edu",
-    password: "admin",
+    passwordHash: "7bbe0d843d1294ab9f88320bdde8582be0221f1f3cb038b13a4e2401690f4470",
     role: "admin",
     badge: "Campus Security & Admin"
   },
@@ -14,7 +20,7 @@ const DEFAULT_USERS = [
     id: "student-1",
     name: "Rachel Adams",
     email: "rachel.a@apex.edu",
-    password: "password123",
+    passwordHash: "58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d",
     role: "student",
     badge: "Student"
   }
@@ -99,6 +105,36 @@ const DB_NOTIFS_KEY = 'campus_notifs_prod';
 const DB_AUDIT_KEY = 'campus_audit_prod';
 const SESSION_USER_KEY = 'campus_session_user';
 
+// -------------------------------------------------------------
+// Cryptographic Password Hashing (Web Crypto API)
+// -------------------------------------------------------------
+
+async function hashPassword(password, salt) {
+  const enc = new TextEncoder();
+  const data = enc.encode(password + ":" + salt);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function createSignedSessionToken(user) {
+  const payload = `${user.id}:${user.email}:${user.role}:${SESSION_SIGNING_SALT}`;
+  const enc = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", enc.encode(payload));
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function verifySessionToken(user, token) {
+  if (!user || !token) return false;
+  const expectedToken = await createSignedSessionToken(user);
+  return expectedToken === token;
+}
+
+// -------------------------------------------------------------
+// Database Access & Migration
+// -------------------------------------------------------------
+
 function getItems() {
   const d = localStorage.getItem(DB_ITEMS_KEY);
   if (!d) {
@@ -118,11 +154,40 @@ function getUsers() {
     localStorage.setItem(DB_USERS_KEY, JSON.stringify(DEFAULT_USERS));
     return [...DEFAULT_USERS];
   }
-  try { return JSON.parse(d); } catch(e) { return [...DEFAULT_USERS]; }
+  try {
+    let users = JSON.parse(d);
+    // Sanitize any legacy unhashed passwords from old storage
+    let migrated = false;
+    users = users.map(u => {
+      if (u.password) {
+        migrated = true;
+        delete u.password;
+        if (!u.passwordHash) {
+          // fallback default hash
+          u.passwordHash = u.email === "security@apex.edu"
+            ? "7bbe0d843d1294ab9f88320bdde8582be0221f1f3cb038b13a4e2401690f4470"
+            : "58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d";
+        }
+      }
+      return u;
+    });
+    if (migrated) {
+      localStorage.setItem(DB_USERS_KEY, JSON.stringify(users));
+    }
+    return users;
+  } catch(e) {
+    return [...DEFAULT_USERS];
+  }
 }
 
 function saveUsers(users) {
-  localStorage.setItem(DB_USERS_KEY, JSON.stringify(users));
+  // Ensure no plaintext passwords can ever be saved
+  const sanitized = users.map(u => {
+    const copy = { ...u };
+    delete copy.password;
+    return copy;
+  });
+  localStorage.setItem(DB_USERS_KEY, JSON.stringify(sanitized));
 }
 
 function getClaims() {
@@ -152,7 +217,7 @@ function getAuditLogs() {
       {
         id: "audit-init",
         action: "REGISTRY_INITIALIZED",
-        details: "Apex University Central Lost & Found Registry online.",
+        details: "Apex University Central Lost & Found Registry online with WebCrypto security.",
         timestamp: new Date().toISOString()
       }
     ];
@@ -164,47 +229,216 @@ function saveAuditLogs(logs) {
   localStorage.setItem(DB_AUDIT_KEY, JSON.stringify(logs));
 }
 
-// Session Management
+// -------------------------------------------------------------
+// Session Management & Cryptographic Integrity Check
+// -------------------------------------------------------------
+
 function getLoggedInUser() {
   const d = localStorage.getItem(SESSION_USER_KEY);
   if (!d) return null;
-  try { return JSON.parse(d); } catch(e) { return null; }
+  try {
+    const session = JSON.parse(d);
+    return session.user || null;
+  } catch(e) {
+    return null;
+  }
 }
 
-function setLoggedInUser(user) {
+async function verifyActiveSession() {
+  const d = localStorage.getItem(SESSION_USER_KEY);
+  if (!d) return null;
+  try {
+    const session = JSON.parse(d);
+    if (!session.user || !session.token) {
+      localStorage.removeItem(SESSION_USER_KEY);
+      return null;
+    }
+    const isValid = await verifySessionToken(session.user, session.token);
+    if (!isValid) {
+      // Tampering detected!
+      const logs = getAuditLogs();
+      logs.unshift({
+        id: `audit-${Date.now()}`,
+        action: "SESSION_TAMPERING_DETECTED",
+        details: `Cryptographic signature mismatch for session user ${session.user.email || 'unknown'}. Revoking session.`,
+        timestamp: new Date().toISOString()
+      });
+      saveAuditLogs(logs);
+      localStorage.removeItem(SESSION_USER_KEY);
+      showToast("Security notice: Session expired or signature invalid. Please sign in again.", "error");
+      updateAuthUI();
+      return null;
+    }
+    return session.user;
+  } catch(e) {
+    localStorage.removeItem(SESSION_USER_KEY);
+    return null;
+  }
+}
+
+async function setLoggedInUser(user) {
   if (!user) {
     localStorage.removeItem(SESSION_USER_KEY);
   } else {
-    localStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
+    // Sanitize user object to never store credentials in session
+    const safeUser = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      badge: user.badge
+    };
+    const token = await createSignedSessionToken(safeUser);
+    localStorage.setItem(SESSION_USER_KEY, JSON.stringify({ user: safeUser, token: token }));
   }
   updateAuthUI();
   renderCurrentView();
 }
 
+// -------------------------------------------------------------
+// Non-Blocking Confirmation Modal Helper (Replaces native confirm())
+// -------------------------------------------------------------
+
+let confirmResolve = null;
+
+function showConfirmDialog(title, message, confirmText = "Confirm") {
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    const modal = document.getElementById("confirm-modal");
+    const titleEl = document.getElementById("confirm-title");
+    const msgEl = document.getElementById("confirm-message");
+    const okBtn = document.getElementById("confirm-ok-btn");
+    const cancelBtn = document.getElementById("confirm-cancel-btn");
+
+    if (!modal) {
+      resolve(false);
+      return;
+    }
+
+    titleEl.textContent = title;
+    msgEl.textContent = message;
+    okBtn.textContent = confirmText;
+
+    okBtn.onclick = () => {
+      modal.classList.add("hidden");
+      if (confirmResolve) confirmResolve(true);
+      confirmResolve = null;
+    };
+
+    cancelBtn.onclick = () => {
+      modal.classList.add("hidden");
+      if (confirmResolve) confirmResolve(false);
+      confirmResolve = null;
+    };
+
+    modal.classList.remove("hidden");
+    lucide.createIcons();
+  });
+}
+
+// -------------------------------------------------------------
+// Form Inline Field Validation Helper
+// -------------------------------------------------------------
+
+function validateForm(formElement) {
+  if (!formElement) return false;
+  let isValid = true;
+  let firstInvalid = null;
+
+  // Clear existing errors in this form
+  formElement.querySelectorAll(".field-error-msg").forEach(el => el.remove());
+  formElement.querySelectorAll(".input-error").forEach(el => {
+    el.classList.remove("input-error");
+  });
+
+  const inputs = formElement.querySelectorAll("input, select, textarea");
+
+  inputs.forEach(input => {
+    // Listen for input to automatically clear errors
+    if (!input.dataset.validationBound) {
+      input.dataset.validationBound = "true";
+      input.addEventListener("input", () => clearInputError(input));
+      input.addEventListener("change", () => clearInputError(input));
+    }
+
+    // Skip hidden or disabled inputs
+    if (input.type === "hidden" || input.disabled || input.closest(".hidden")) return;
+
+    let error = null;
+
+    if (input.required && !input.value.trim()) {
+      error = "This field is required.";
+    } else if (input.type === "email" && input.value.trim()) {
+      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailPattern.test(input.value.trim())) {
+        error = "Please enter a valid email address.";
+      }
+    } else if (input.minLength && input.value.trim().length < input.minLength) {
+      error = `Must be at least ${input.minLength} characters.`;
+    }
+
+    if (error) {
+      isValid = false;
+      input.classList.add("input-error");
+      const errP = document.createElement("p");
+      errP.className = "field-error-msg text-[11px] text-red-600 font-medium mt-1 flex items-center gap-1";
+      errP.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5 text-red-500 shrink-0"></i><span>${error}</span>`;
+      
+      // Insert after input or parent container if needed
+      input.parentNode.appendChild(errP);
+
+      if (!firstInvalid) firstInvalid = input;
+    }
+  });
+
+  if (firstInvalid) {
+    firstInvalid.focus();
+  }
+
+  lucide.createIcons();
+  return isValid;
+}
+
+function clearInputError(input) {
+  input.classList.remove("input-error");
+  const err = input.parentNode.querySelector(".field-error-msg");
+  if (err) err.remove();
+}
+
+// -------------------------------------------------------------
 // Router State
+// -------------------------------------------------------------
+
 let currentView = 'home';
 let viewParams = {};
 let uploadedImageBase64 = null;
 
 // Initialize on Load
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   const urlParams = new URLSearchParams(window.location.search);
   const viewParam = urlParams.get('view');
   if (viewParam) currentView = viewParam;
 
+  await verifyActiveSession();
   updateAuthUI();
   renderCurrentView();
   lucide.createIcons();
 });
 
-function navigate(view, params = {}) {
+async function navigate(view, params = {}) {
   currentView = view;
   viewParams = params;
 
-  // Protect Dashboard & Admin routes
-  const user = getLoggedInUser();
+  // Protect Dashboard & Admin routes with cryptographic session verification
+  const user = await verifyActiveSession();
   if ((view === 'dashboard' || view === 'admin') && !user) {
     openAuthModal('Please sign in to access your dashboard and records.');
+    return;
+  }
+
+  if (view === 'admin' && user.role !== 'admin') {
+    showToast("Access Restricted: Campus Security clearance required.", "error");
+    navigate('home');
     return;
   }
 
@@ -1208,6 +1442,7 @@ function openReportModal(type) {
   }
 
   const modal = document.getElementById('report-modal');
+  const form = document.getElementById('report-form');
   const typeInput = document.getElementById('report-type');
   const title = document.getElementById('modal-title');
   const subtitle = document.getElementById('modal-subtitle');
@@ -1215,10 +1450,15 @@ function openReportModal(type) {
   const foundSecret = document.getElementById('found-secret-config');
   const submitBtn = document.getElementById('report-submit-btn');
 
-  if (!modal) return;
+  if (!modal || !form) return;
 
   typeInput.value = type;
-  document.getElementById('report-form').reset();
+  form.reset();
+
+  // Clear previous validation highlights
+  form.querySelectorAll('.field-error-msg').forEach(el => el.remove());
+  form.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+
   uploadedImageBase64 = null;
   document.getElementById('image-preview').innerHTML = '<i data-lucide="image" class="w-6 h-6 text-slate-400"></i>';
   document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
@@ -1268,9 +1508,17 @@ function previewPhoto(event) {
 
 function handleReportSubmit(e) {
   e.preventDefault();
+  const form = document.getElementById('report-form');
+
+  // Inline Validation Check
+  if (!validateForm(form)) {
+    showToast("Please fill in all required fields indicated in red.", "error");
+    return;
+  }
+
   const user = getLoggedInUser();
   if (!user) {
-    openAuthModal();
+    openAuthModal('Session expired. Please sign in to report items.');
     return;
   }
 
@@ -1328,6 +1576,12 @@ function openClaimModal(itemId) {
   if (!item) return;
 
   const modal = document.getElementById('claim-modal');
+  const form = document.getElementById('claim-form');
+
+  form.reset();
+  form.querySelectorAll('.field-error-msg').forEach(el => el.remove());
+  form.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+
   document.getElementById('claim-item-id').value = item.id;
   document.getElementById('claim-question-text').textContent = item.secretQuestion || "Please provide details only the true owner would know.";
   document.getElementById('claim-answer').value = '';
@@ -1354,9 +1608,16 @@ function closeClaimModal() {
 
 function handleClaimSubmit(e) {
   e.preventDefault();
+  const form = document.getElementById('claim-form');
+
+  if (!validateForm(form)) {
+    showToast("Please enter your verification answer.", "error");
+    return;
+  }
+
   const user = getLoggedInUser();
   if (!user) {
-    openAuthModal();
+    openAuthModal('Please sign in to submit a claim.');
     return;
   }
 
@@ -1522,7 +1783,13 @@ function completeHandover(claimId) {
   renderCurrentView();
 }
 
-function adminToggleHide(itemId, shouldHide) {
+async function adminToggleHide(itemId, shouldHide) {
+  const user = await verifyActiveSession();
+  if (!user || user.role !== 'admin') {
+    showToast("Unauthorized: Admin clearance required.", "error");
+    return;
+  }
+
   const items = getItems();
   const item = items.find(i => i.id === itemId);
   if (!item) return;
@@ -1534,7 +1801,7 @@ function adminToggleHide(itemId, shouldHide) {
   logs.unshift({
     id: `audit-${Date.now()}`,
     action: shouldHide ? 'ITEM_MODERATED_HIDDEN' : 'ITEM_UNHIDDEN',
-    details: `Item #${item.id} was ${shouldHide ? 'hidden' : 'restored'} by Admin.`,
+    details: `Item #${item.id} was ${shouldHide ? 'hidden' : 'restored'} by Admin ${user.name}.`,
     timestamp: new Date().toISOString()
   });
   saveAuditLogs(logs);
@@ -1543,17 +1810,41 @@ function adminToggleHide(itemId, shouldHide) {
   renderCurrentView();
 }
 
-function adminDelete(itemId) {
-  if (!confirm("Are you sure you want to permanently delete this report?")) return;
+async function adminDelete(itemId) {
+  const user = await verifyActiveSession();
+  if (!user || user.role !== 'admin') {
+    showToast("Unauthorized: Admin clearance required.", "error");
+    return;
+  }
+
+  // Non-blocking modal confirmation dialog (Replaces native confirm())
+  const confirmed = await showConfirmDialog(
+    "Delete Listing",
+    "Are you sure you want to permanently delete this report? This action is recorded in the security audit trail.",
+    "Permanently Delete"
+  );
+
+  if (!confirmed) return;
+
   let items = getItems();
   items = items.filter(i => i.id !== itemId);
   saveItems(items);
+
+  const logs = getAuditLogs();
+  logs.unshift({
+    id: `audit-${Date.now()}`,
+    action: "ITEM_DELETED_BY_ADMIN",
+    details: `Report #${itemId} permanently removed by Admin ${user.name}.`,
+    timestamp: new Date().toISOString()
+  });
+  saveAuditLogs(logs);
+
   showToast('Item deleted by Admin.', 'info');
   renderCurrentView();
 }
 
 // -------------------------------------------------------------
-// Authentication System
+// Authentication System with WebCrypto SHA-256 Passwords
 // -------------------------------------------------------------
 
 function openAuthModal(message) {
@@ -1561,12 +1852,22 @@ function openAuthModal(message) {
   if (message) {
     showToast(message, 'info');
   }
+  // Clear any existing error banners
+  hideAuthBanners();
   if (modal) modal.classList.remove('hidden');
 }
 
 function closeAuthModal() {
   const modal = document.getElementById('auth-modal');
   if (modal) modal.classList.add('hidden');
+  hideAuthBanners();
+}
+
+function hideAuthBanners() {
+  const logBanner = document.getElementById('login-error-banner');
+  const regBanner = document.getElementById('register-error-banner');
+  if (logBanner) logBanner.classList.add('hidden');
+  if (regBanner) regBanner.classList.add('hidden');
 }
 
 function setAuthTab(tab) {
@@ -1575,6 +1876,8 @@ function setAuthTab(tab) {
   const tabLogin = document.getElementById('tab-login');
   const tabRegister = document.getElementById('tab-register');
   const authTitle = document.getElementById('auth-title');
+
+  hideAuthBanners();
 
   if (tab === 'login') {
     loginForm.classList.remove('hidden');
@@ -1591,26 +1894,52 @@ function setAuthTab(tab) {
   }
 }
 
-function handleAuthLogin(e) {
+async function handleAuthLogin(e) {
   e.preventDefault();
+  const form = document.getElementById('login-form');
+  const errorBanner = document.getElementById('login-error-banner');
+  const errorMsg = document.getElementById('login-error-message');
+
+  // Inline field validation check
+  if (!validateForm(form)) {
+    return;
+  }
+
   const email = document.getElementById('login-email').value.trim().toLowerCase();
   const password = document.getElementById('login-password').value;
 
   const users = getUsers();
   const user = users.find(u => u.email.toLowerCase() === email);
 
-  if (!user || user.password !== password) {
-    alert("Invalid credentials. If using the default admin account: security@apex.edu / admin");
+  // Compute SHA-256 hash using the email as salt
+  const inputHash = await hashPassword(password, email);
+
+  if (!user || user.passwordHash !== inputHash) {
+    // Non-blocking inline banner and toast (NO blocking alert())
+    if (errorBanner && errorMsg) {
+      errorMsg.textContent = "Invalid university email or password. Default admin: security@apex.edu / admin";
+      errorBanner.classList.remove('hidden');
+    }
+    showToast("Invalid email or password. Please try again.", "error");
     return;
   }
 
-  setLoggedInUser(user);
+  await setLoggedInUser(user);
   closeAuthModal();
   showToast(`Welcome back, ${user.name}!`, 'success');
 }
 
-function handleAuthRegister(e) {
+async function handleAuthRegister(e) {
   e.preventDefault();
+  const form = document.getElementById('register-form');
+  const errorBanner = document.getElementById('register-error-banner');
+  const errorMsg = document.getElementById('register-error-message');
+
+  // Inline field validation check
+  if (!validateForm(form)) {
+    return;
+  }
+
   const name = document.getElementById('register-name').value.trim();
   const email = document.getElementById('register-email').value.trim().toLowerCase();
   const role = document.getElementById('register-role').value;
@@ -1618,15 +1947,23 @@ function handleAuthRegister(e) {
 
   const users = getUsers();
   if (users.find(u => u.email.toLowerCase() === email)) {
-    alert("An account with this email already exists. Please sign in.");
+    // Non-blocking inline banner and toast (NO blocking alert())
+    if (errorBanner && errorMsg) {
+      errorMsg.textContent = "An account with this university email already exists. Please sign in.";
+      errorBanner.classList.remove('hidden');
+    }
+    showToast("Account already exists. Please sign in.", "error");
     return;
   }
+
+  // WebCrypto SHA-256 Password Hashing - Never store plaintext!
+  const passwordHash = await hashPassword(password, email);
 
   const newUser = {
     id: `usr-${Date.now().toString().slice(-4)}`,
     name: name,
     email: email,
-    password: password,
+    passwordHash: passwordHash,
     role: role,
     badge: role === 'staff' ? 'University Staff' : 'Student'
   };
@@ -1634,13 +1971,13 @@ function handleAuthRegister(e) {
   users.push(newUser);
   saveUsers(users);
 
-  setLoggedInUser(newUser);
+  await setLoggedInUser(newUser);
   closeAuthModal();
   showToast(`Account created! Welcome, ${newUser.name}.`, 'success');
 }
 
-function handleLogout() {
-  setLoggedInUser(null);
+async function handleLogout() {
+  await setLoggedInUser(null);
   showToast('You have been signed out.', 'info');
   navigate('home');
 }
@@ -1810,6 +2147,10 @@ function toggleMobileMenu() {
   if (el) el.classList.toggle('hidden');
 }
 
+// -------------------------------------------------------------
+// Non-Blocking Toast Notification System
+// -------------------------------------------------------------
+
 function showToast(message, type = 'info') {
   const toast = document.getElementById('toast');
   const msgEl = document.getElementById('toast-message');
@@ -1818,14 +2159,23 @@ function showToast(message, type = 'info') {
   if (!toast || !msgEl) return;
 
   msgEl.textContent = message;
-  iconEl.innerHTML = type === 'success' 
-    ? '<i data-lucide="check-circle" class="w-5 h-5 text-emerald-400"></i>'
-    : '<i data-lucide="info" class="w-5 h-5 text-blue-400"></i>';
+
+  if (type === 'error') {
+    iconEl.innerHTML = '<i data-lucide="alert-circle" class="w-5 h-5 text-rose-400 shrink-0"></i>';
+    toast.className = "fixed bottom-6 right-6 z-50 bg-rose-950 text-rose-100 border border-rose-800 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all transform duration-300";
+  } else if (type === 'success') {
+    iconEl.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5 text-emerald-400 shrink-0"></i>';
+    toast.className = "fixed bottom-6 right-6 z-50 bg-slate-900 text-white border border-emerald-800 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all transform duration-300";
+  } else {
+    iconEl.innerHTML = '<i data-lucide="info" class="w-5 h-5 text-blue-400 shrink-0"></i>';
+    toast.className = "fixed bottom-6 right-6 z-50 bg-slate-900 text-white border border-slate-800 px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 transition-all transform duration-300";
+  }
 
   toast.classList.remove('hidden');
   lucide.createIcons();
 
-  setTimeout(() => {
+  if (window.toastTimeout) clearTimeout(window.toastTimeout);
+  window.toastTimeout = setTimeout(() => {
     toast.classList.add('hidden');
-  }, 3500);
+  }, 4000);
 }
