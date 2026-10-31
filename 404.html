@@ -283,7 +283,6 @@
         </div>
       </div>
 
-      <!-- Report Form with novalidate so our custom inline field highlighter controls it -->
       <form id="report-form" novalidate onsubmit="handleReportSubmit(event)" class="space-y-4">
         <input type="hidden" id="report-type" value="LOST">
 
@@ -364,7 +363,7 @@
           </div>
         </div>
 
-        <!-- Photo Upload -->
+        <!-- Photo Upload with Client-Side Canvas Compression -->
         <div>
           <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Photo (Optional but Recommended)</label>
           <div class="flex items-center gap-4">
@@ -373,7 +372,7 @@
             </div>
             <div class="flex-grow">
               <input type="file" id="report-photo" accept="image/*" onchange="previewPhoto(event)" class="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
-              <div class="text-[11px] text-slate-400 mt-1">PNG, JPG up to 5MB</div>
+              <div id="photo-size-feedback" class="text-[11px] text-slate-400 mt-1">Automatic client-side canvas compression applied</div>
             </div>
           </div>
         </div>
@@ -390,7 +389,7 @@
     </div>
   </div>
 
-  <!-- Claim Ownership Modal -->
+  <!-- Claim Ownership Modal (For FOUND items) -->
   <div id="claim-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
     <div class="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative my-8">
       <button onclick="closeClaimModal()" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
@@ -442,6 +441,54 @@
           </button>
           <button type="submit" class="px-5 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition flex items-center gap-2">
             <i data-lucide="send" class="w-4 h-4"></i> Submit Claim
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Notify Found Modal (For LOST items - Resolves Issue 10) -->
+  <div id="notify-found-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative my-8">
+      <button onclick="closeNotifyFoundModal()" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-6">
+        <div class="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600">
+          <i data-lucide="sparkles" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-xl font-bold text-slate-900">Found This Lost Item?</h3>
+          <p class="text-xs text-slate-500">Notify the owner and arrange safe campus recovery</p>
+        </div>
+      </div>
+
+      <div id="notify-item-summary" class="p-3 bg-slate-50 rounded-xl border border-slate-200 mb-4 flex items-center gap-3">
+        <!-- Summary injected -->
+      </div>
+
+      <form id="notify-found-form" novalidate onsubmit="handleNotifyFoundSubmit(event)" class="space-y-4">
+        <input type="hidden" id="notify-item-id">
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Where is the item right now? *</label>
+          <input type="text" id="notify-location" required placeholder="e.g. Deposited with Librarian Mrs. Evans at Central Library Desk" 
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 bg-white transition">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Message for the Owner *</label>
+          <textarea id="notify-message" rows="3" required placeholder="Describe condition, confirm distinguishing marks, or explain where they can safely collect it." 
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-emerald-500 transition"></textarea>
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-3">
+          <button type="button" onclick="closeNotifyFoundModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg">
+            Cancel
+          </button>
+          <button type="submit" class="px-5 py-2.5 text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg shadow-sm transition flex items-center gap-2">
+            <i data-lucide="send" class="w-4 h-4"></i> Send Notification to Owner
           </button>
         </div>
       </form>
@@ -513,10 +560,10 @@
         <h4 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">Security & Anti-Fraud</h4>
         <ul class="space-y-1.5 text-xs">
           <li>&bull; WebCrypto SHA-256 Hashed Passwords</li>
-          <li>&bull; Confidential Verification Questions</li>
-          <li>&bull; Safe In-App Communication</li>
-          <li>&bull; Cryptographically Signed Session Verification</li>
-          <li>&bull; Comprehensive Moderation Audit Trail</li>
+          <li>&bull; XSS-Protected Dynamic Content</li>
+          <li>&bull; Canvas Compressed Image Quota Guard</li>
+          <li>&bull; Cross-Tab Storage Synchronisation</li>
+          <li>&bull; Deep-Linkable Hash Routing & Audit Trail</li>
         </ul>
       </div>
 

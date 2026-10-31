@@ -5,8 +5,6 @@
 const SESSION_SIGNING_SALT = "apex_campus_security_session_salt_2026";
 
 // Default System Users with Pre-computed WebCrypto SHA-256 Hashes
-// security@apex.edu: pass="admin" -> 7bbe0d843d1294ab9f88320bdde8582be0221f1f3cb038b13a4e2401690f4470
-// rachel.a@apex.edu: pass="password123" -> 58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d
 const DEFAULT_USERS = [
   {
     id: "admin-sec",
@@ -106,6 +104,79 @@ const DB_AUDIT_KEY = 'campus_audit_prod';
 const SESSION_USER_KEY = 'campus_session_user';
 
 // -------------------------------------------------------------
+// Issue 5: XSS Sanitization Engine
+// -------------------------------------------------------------
+
+function escapeHTML(str) {
+  if (str === null || str === undefined) return '';
+  return String(str).replace(/[&<>'"]/g, 
+    tag => ({
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      "'": '&#39;',
+      '"': '&quot;'
+    }[tag] || tag)
+  );
+}
+
+// -------------------------------------------------------------
+// Issue 6: HTML5 Canvas Image Compression Helper (< 100 KB)
+// -------------------------------------------------------------
+
+function compressImage(file, maxWidth = 800, quality = 0.7) {
+  return new Promise((resolve, reject) => {
+    if (!file) return resolve(null);
+    if (!file.type.startsWith("image/")) {
+      return reject(new Error("Selected file must be an image."));
+    }
+    // Hard limit: 12MB input
+    if (file.size > 12 * 1024 * 1024) {
+      return reject(new Error("File size exceeds 12MB limit. Please choose a smaller image."));
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+        resolve(compressedDataUrl);
+      };
+      img.onerror = () => reject(new Error("Failed to load and downscale image."));
+      img.src = e.target.result;
+    };
+    reader.onerror = () => reject(new Error("Failed to read image file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+// Safe localStorage wrapper to guard against QuotaExceededError
+function safeStorageSet(key, value) {
+  try {
+    localStorage.setItem(key, value);
+    return true;
+  } catch (err) {
+    console.error("Storage error:", err);
+    showToast("Storage quota warning: browser local cache is full.", "error");
+    return false;
+  }
+}
+
+// -------------------------------------------------------------
 // Cryptographic Password Hashing (Web Crypto API)
 // -------------------------------------------------------------
 
@@ -132,38 +203,36 @@ async function verifySessionToken(user, token) {
 }
 
 // -------------------------------------------------------------
-// Database Access & Migration
+// Database Access & Sanitization
 // -------------------------------------------------------------
 
 function getItems() {
   const d = localStorage.getItem(DB_ITEMS_KEY);
   if (!d) {
-    localStorage.setItem(DB_ITEMS_KEY, JSON.stringify(INITIAL_ITEMS));
+    safeStorageSet(DB_ITEMS_KEY, JSON.stringify(INITIAL_ITEMS));
     return [...INITIAL_ITEMS];
   }
   try { return JSON.parse(d); } catch(e) { return [...INITIAL_ITEMS]; }
 }
 
 function saveItems(items) {
-  localStorage.setItem(DB_ITEMS_KEY, JSON.stringify(items));
+  safeStorageSet(DB_ITEMS_KEY, JSON.stringify(items));
 }
 
 function getUsers() {
   const d = localStorage.getItem(DB_USERS_KEY);
   if (!d) {
-    localStorage.setItem(DB_USERS_KEY, JSON.stringify(DEFAULT_USERS));
+    safeStorageSet(DB_USERS_KEY, JSON.stringify(DEFAULT_USERS));
     return [...DEFAULT_USERS];
   }
   try {
     let users = JSON.parse(d);
-    // Sanitize any legacy unhashed passwords from old storage
     let migrated = false;
     users = users.map(u => {
       if (u.password) {
         migrated = true;
         delete u.password;
         if (!u.passwordHash) {
-          // fallback default hash
           u.passwordHash = u.email === "security@apex.edu"
             ? "7bbe0d843d1294ab9f88320bdde8582be0221f1f3cb038b13a4e2401690f4470"
             : "58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d";
@@ -172,7 +241,7 @@ function getUsers() {
       return u;
     });
     if (migrated) {
-      localStorage.setItem(DB_USERS_KEY, JSON.stringify(users));
+      safeStorageSet(DB_USERS_KEY, JSON.stringify(users));
     }
     return users;
   } catch(e) {
@@ -181,13 +250,12 @@ function getUsers() {
 }
 
 function saveUsers(users) {
-  // Ensure no plaintext passwords can ever be saved
   const sanitized = users.map(u => {
     const copy = { ...u };
     delete copy.password;
     return copy;
   });
-  localStorage.setItem(DB_USERS_KEY, JSON.stringify(sanitized));
+  safeStorageSet(DB_USERS_KEY, JSON.stringify(sanitized));
 }
 
 function getClaims() {
@@ -197,7 +265,7 @@ function getClaims() {
 }
 
 function saveClaims(claims) {
-  localStorage.setItem(DB_CLAIMS_KEY, JSON.stringify(claims));
+  safeStorageSet(DB_CLAIMS_KEY, JSON.stringify(claims));
 }
 
 function getNotifications() {
@@ -207,7 +275,7 @@ function getNotifications() {
 }
 
 function saveNotifications(notifs) {
-  localStorage.setItem(DB_NOTIFS_KEY, JSON.stringify(notifs));
+  safeStorageSet(DB_NOTIFS_KEY, JSON.stringify(notifs));
 }
 
 function getAuditLogs() {
@@ -217,7 +285,7 @@ function getAuditLogs() {
       {
         id: "audit-init",
         action: "REGISTRY_INITIALIZED",
-        details: "Apex University Central Lost & Found Registry online with WebCrypto security.",
+        details: "Apex University Central Lost & Found Registry online with WebCrypto & XSS protection.",
         timestamp: new Date().toISOString()
       }
     ];
@@ -226,7 +294,7 @@ function getAuditLogs() {
 }
 
 function saveAuditLogs(logs) {
-  localStorage.setItem(DB_AUDIT_KEY, JSON.stringify(logs));
+  safeStorageSet(DB_AUDIT_KEY, JSON.stringify(logs));
 }
 
 // -------------------------------------------------------------
@@ -255,7 +323,6 @@ async function verifyActiveSession() {
     }
     const isValid = await verifySessionToken(session.user, session.token);
     if (!isValid) {
-      // Tampering detected!
       const logs = getAuditLogs();
       logs.unshift({
         id: `audit-${Date.now()}`,
@@ -280,7 +347,6 @@ async function setLoggedInUser(user) {
   if (!user) {
     localStorage.removeItem(SESSION_USER_KEY);
   } else {
-    // Sanitize user object to never store credentials in session
     const safeUser = {
       id: user.id,
       name: user.name,
@@ -289,14 +355,14 @@ async function setLoggedInUser(user) {
       badge: user.badge
     };
     const token = await createSignedSessionToken(safeUser);
-    localStorage.setItem(SESSION_USER_KEY, JSON.stringify({ user: safeUser, token: token }));
+    safeStorageSet(SESSION_USER_KEY, JSON.stringify({ user: safeUser, token: token }));
   }
   updateAuthUI();
   renderCurrentView();
 }
 
 // -------------------------------------------------------------
-// Non-Blocking Confirmation Modal Helper (Replaces native confirm())
+// Non-Blocking Confirmation Modal Helper
 // -------------------------------------------------------------
 
 let confirmResolve = null;
@@ -345,7 +411,6 @@ function validateForm(formElement) {
   let isValid = true;
   let firstInvalid = null;
 
-  // Clear existing errors in this form
   formElement.querySelectorAll(".field-error-msg").forEach(el => el.remove());
   formElement.querySelectorAll(".input-error").forEach(el => {
     el.classList.remove("input-error");
@@ -354,14 +419,12 @@ function validateForm(formElement) {
   const inputs = formElement.querySelectorAll("input, select, textarea");
 
   inputs.forEach(input => {
-    // Listen for input to automatically clear errors
     if (!input.dataset.validationBound) {
       input.dataset.validationBound = "true";
       input.addEventListener("input", () => clearInputError(input));
       input.addEventListener("change", () => clearInputError(input));
     }
 
-    // Skip hidden or disabled inputs
     if (input.type === "hidden" || input.disabled || input.closest(".hidden")) return;
 
     let error = null;
@@ -382,9 +445,7 @@ function validateForm(formElement) {
       input.classList.add("input-error");
       const errP = document.createElement("p");
       errP.className = "field-error-msg text-[11px] text-red-600 font-medium mt-1 flex items-center gap-1";
-      errP.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5 text-red-500 shrink-0"></i><span>${error}</span>`;
-      
-      // Insert after input or parent container if needed
+      errP.innerHTML = `<i data-lucide="alert-circle" class="w-3.5 h-3.5 text-red-500 shrink-0"></i><span>${escapeHTML(error)}</span>`;
       input.parentNode.appendChild(errP);
 
       if (!firstInvalid) firstInvalid = input;
@@ -406,30 +467,49 @@ function clearInputError(input) {
 }
 
 // -------------------------------------------------------------
-// Router State
+// Issue 8: Hash Routing & History Navigation Engine
 // -------------------------------------------------------------
 
 let currentView = 'home';
 let viewParams = {};
 let uploadedImageBase64 = null;
 
-// Initialize on Load
-document.addEventListener('DOMContentLoaded', async () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const viewParam = urlParams.get('view');
-  if (viewParam) currentView = viewParam;
+function parseRouteFromHash() {
+  const hash = window.location.hash || '#/';
+  const cleanHash = hash.replace(/^#\/?/, '');
+  const [pathPart, queryPart] = cleanHash.split('?');
 
-  await verifyActiveSession();
-  updateAuthUI();
-  renderCurrentView();
-  lucide.createIcons();
-});
+  const params = {};
+  if (queryPart) {
+    const searchParams = new URLSearchParams(queryPart);
+    for (const [k, v] of searchParams.entries()) {
+      params[k] = v;
+    }
+  }
 
-async function navigate(view, params = {}) {
+  if (!pathPart || pathPart === '') {
+    return { view: 'home', params };
+  }
+
+  const segments = pathPart.split('/');
+  if (segments[0] === 'item' && segments[1]) {
+    return { view: 'item-detail', params: { ...params, id: segments[1] } };
+  } else if (segments[0] === 'browse') {
+    return { view: 'browse', params };
+  } else if (segments[0] === 'dashboard') {
+    return { view: 'dashboard', params };
+  } else if (segments[0] === 'admin') {
+    return { view: 'admin', params };
+  }
+
+  return { view: 'home', params };
+}
+
+async function navigate(view, params = {}, updateHash = true) {
   currentView = view;
   viewParams = params;
 
-  // Protect Dashboard & Admin routes with cryptographic session verification
+  // Protect Dashboard & Admin routes
   const user = await verifyActiveSession();
   if ((view === 'dashboard' || view === 'admin') && !user) {
     openAuthModal('Please sign in to access your dashboard and records.');
@@ -440,6 +520,24 @@ async function navigate(view, params = {}) {
     showToast("Access Restricted: Campus Security clearance required.", "error");
     navigate('home');
     return;
+  }
+
+  if (updateHash) {
+    let hashUrl = '#/';
+    if (view === 'browse') {
+      const q = new URLSearchParams(params).toString();
+      hashUrl = `#/browse${q ? '?' + q : ''}`;
+    } else if (view === 'item-detail' && params.id) {
+      hashUrl = `#/item/${encodeURIComponent(params.id)}`;
+    } else if (view === 'dashboard') {
+      hashUrl = `#/dashboard`;
+    } else if (view === 'admin') {
+      hashUrl = `#/admin`;
+    }
+
+    if (window.location.hash !== hashUrl) {
+      window.location.hash = hashUrl;
+    }
   }
 
   // Update nav active states
@@ -459,6 +557,35 @@ async function navigate(view, params = {}) {
   renderCurrentView();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
+
+// -------------------------------------------------------------
+// Issue 7: Cross-Tab Storage Event Synchronization
+// -------------------------------------------------------------
+
+window.addEventListener('storage', async (event) => {
+  if ([DB_ITEMS_KEY, DB_CLAIMS_KEY, DB_NOTIFS_KEY, SESSION_USER_KEY, DB_AUDIT_KEY].includes(event.key)) {
+    await verifyActiveSession();
+    updateAuthUI();
+    renderCurrentView();
+  }
+});
+
+// History & Hash listener
+window.addEventListener('hashchange', () => {
+  const route = parseRouteFromHash();
+  navigate(route.view, route.params, false);
+});
+
+// Initialize on Load
+document.addEventListener('DOMContentLoaded', async () => {
+  await verifyActiveSession();
+  updateAuthUI();
+
+  // Load initial route from URL Hash
+  const route = parseRouteFromHash();
+  navigate(route.view, route.params, false);
+  lucide.createIcons();
+});
 
 function renderCurrentView() {
   const container = document.getElementById('app-container');
@@ -645,10 +772,10 @@ function renderItemCard(item) {
   const icon = isLost ? 'alert-triangle' : 'check-circle';
 
   return `
-    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col group cursor-pointer" onclick="navigate('item-detail', { id: '${item.id}' })">
+    <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col group cursor-pointer" onclick="navigate('item-detail', { id: '${escapeHTML(item.id)}' })">
       <div class="h-44 bg-slate-100 relative overflow-hidden">
         ${item.photo ? `
-          <img src="${item.photo}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
+          <img src="${escapeHTML(item.photo)}" alt="${escapeHTML(item.title)}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
         ` : `
           <div class="w-full h-full flex flex-col items-center justify-center text-slate-400 bg-slate-50">
             <i data-lucide="package" class="w-10 h-10 mb-1"></i>
@@ -673,20 +800,20 @@ function renderItemCard(item) {
       </div>
 
       <div class="p-4 flex flex-col flex-grow">
-        <div class="text-[11px] font-medium text-blue-600 uppercase tracking-wider mb-1">${item.category}</div>
+        <div class="text-[11px] font-medium text-blue-600 uppercase tracking-wider mb-1">${escapeHTML(item.category)}</div>
         <h4 class="font-bold text-slate-900 text-sm leading-snug line-clamp-1 mb-1.5 group-hover:text-blue-600 transition">
-          ${item.title}
+          ${escapeHTML(item.title)}
         </h4>
         <p class="text-xs text-slate-500 line-clamp-2 mb-3 leading-relaxed">
-          ${item.description}
+          ${escapeHTML(item.description)}
         </p>
 
         <div class="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
           <span class="flex items-center gap-1">
             <i data-lucide="map-pin" class="w-3.5 h-3.5 text-slate-400"></i>
-            <span class="truncate max-w-[130px]">${item.building}</span>
+            <span class="truncate max-w-[130px]">${escapeHTML(item.building)}</span>
           </span>
-          <span>${item.date}</span>
+          <span>${escapeHTML(item.date)}</span>
         </div>
       </div>
     </div>
@@ -705,11 +832,11 @@ function renderBrowseView() {
 
   if (query) {
     filtered = filtered.filter(i => 
-      i.title.toLowerCase().includes(query) ||
-      i.description.toLowerCase().includes(query) ||
-      i.building.toLowerCase().includes(query) ||
-      i.location.toLowerCase().includes(query) ||
-      i.category.toLowerCase().includes(query)
+      (i.title || '').toLowerCase().includes(query) ||
+      (i.description || '').toLowerCase().includes(query) ||
+      (i.building || '').toLowerCase().includes(query) ||
+      (i.location || '').toLowerCase().includes(query) ||
+      (i.category || '').toLowerCase().includes(query)
     );
   }
 
@@ -752,7 +879,7 @@ function renderBrowseView() {
       <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-8 space-y-4">
         <div class="relative">
           <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
-          <input type="text" id="browse-search" value="${viewParams.query || ''}" 
+          <input type="text" id="browse-search" value="${escapeHTML(viewParams.query || '')}" 
             placeholder="Search keywords, items, buildings, descriptions..." 
             oninput="applyBrowseFilter('query', this.value)"
             class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500">
@@ -860,16 +987,16 @@ function renderItemDetailView(itemId) {
           <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Browse
         </button>
         <span>/</span>
-        <span>${item.category}</span>
+        <span>${escapeHTML(item.category)}</span>
         <span>/</span>
-        <span class="text-slate-800 font-medium truncate max-w-xs">${item.title}</span>
+        <span class="text-slate-800 font-medium truncate max-w-xs">${escapeHTML(item.title)}</span>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
         <div class="md:col-span-6">
           <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm relative">
             ${item.photo ? `
-              <img src="${item.photo}" alt="${item.title}" class="w-full h-80 sm:h-96 object-cover">
+              <img src="${escapeHTML(item.photo)}" alt="${escapeHTML(item.title)}" class="w-full h-80 sm:h-96 object-cover">
             ` : `
               <div class="w-full h-80 flex flex-col items-center justify-center text-slate-400 bg-slate-50">
                 <i data-lucide="package" class="w-16 h-16 mb-2"></i>
@@ -901,30 +1028,30 @@ function renderItemDetailView(itemId) {
         </div>
 
         <div class="md:col-span-6 flex flex-col">
-          <div class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">${item.category}</div>
+          <div class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">${escapeHTML(item.category)}</div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight mb-3">
-            ${item.title}
+            ${escapeHTML(item.title)}
           </h1>
 
           <div class="flex items-center gap-4 text-xs text-slate-500 mb-6 pb-4 border-b border-slate-200">
             <span class="flex items-center gap-1">
               <i data-lucide="calendar" class="w-4 h-4 text-slate-400"></i>
-              <span>${item.date}</span>
+              <span>${escapeHTML(item.date)}</span>
             </span>
             <span class="flex items-center gap-1">
               <i data-lucide="map-pin" class="w-4 h-4 text-slate-400"></i>
-              <span>${item.building}</span>
+              <span>${escapeHTML(item.building)}</span>
             </span>
             <span class="flex items-center gap-1">
               <i data-lucide="clock" class="w-4 h-4 text-slate-400"></i>
-              <span>Report #${item.id}</span>
+              <span>Report #${escapeHTML(item.id)}</span>
             </span>
           </div>
 
           <div class="mb-6">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Description & Notes</h3>
             <p class="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200">
-              ${item.description}
+              ${escapeHTML(item.description)}
             </p>
           </div>
 
@@ -935,12 +1062,13 @@ function renderItemDetailView(itemId) {
                 <i data-lucide="building" class="w-4 h-4"></i>
               </div>
               <div>
-                <span class="font-semibold">${item.building}</span> &bull; 
-                <span class="text-slate-600">${item.location}</span>
+                <span class="font-semibold">${escapeHTML(item.building)}</span> &bull; 
+                <span class="text-slate-600">${escapeHTML(item.location)}</span>
               </div>
             </div>
           </div>
 
+          <!-- Actions Column (Addresses Issue 10 - Symmetrical workflow for LOST and FOUND) -->
           <div class="mt-auto pt-6 border-t border-slate-200">
             ${item.type === 'FOUND' && item.status !== 'RECOVERED' ? `
               ${isReporter ? `
@@ -952,7 +1080,7 @@ function renderItemDetailView(itemId) {
                 <div class="p-4 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900">
                   <div class="font-bold flex items-center gap-1.5 mb-1">
                     <i data-lucide="clock" class="w-4 h-4 text-blue-600"></i>
-                    <span>Claim Submitted (${existingClaim.status})</span>
+                    <span>Claim Submitted (${escapeHTML(existingClaim.status)})</span>
                   </div>
                   <p class="text-blue-800">You submitted a claim for this item. Track status in your <button onclick="navigate('dashboard')" class="underline font-bold">Dashboard</button>.</p>
                 </div>
@@ -967,21 +1095,39 @@ function renderItemDetailView(itemId) {
                       <i data-lucide="key" class="w-4 h-4"></i>
                     </div>
                   </div>
-                  <button onclick="promptClaim('${item.id}')" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                  <button onclick="promptClaim('${escapeHTML(item.id)}')" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
                     <i data-lucide="shield-check" class="w-4 h-4"></i>
                     <span>Claim This Item (Verify Ownership)</span>
                   </button>
                 </div>
               `}
-            ` : item.status === 'RECOVERED' ? `
+            ` : item.type === 'LOST' && item.status !== 'RECOVERED' ? `
+              ${isReporter ? `
+                <div class="p-4 bg-slate-100 rounded-xl text-xs text-slate-600 flex items-center gap-2">
+                  <i data-lucide="info" class="w-4 h-4 text-blue-600"></i>
+                  <span>You reported this item as lost. Check your <button onclick="navigate('dashboard')" class="text-blue-600 font-bold hover:underline">Dashboard</button> for finder notifications.</span>
+                </div>
+              ` : `
+                <div class="p-5 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-2xl">
+                  <div class="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <h4 class="font-bold text-emerald-950 text-sm">Did you find this belonging?</h4>
+                      <p class="text-xs text-emerald-700 mt-0.5">Directly notify the student who lost it and arrange a safe campus handover.</p>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                      <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    </div>
+                  </div>
+                  <button onclick="openNotifyFoundModal('${escapeHTML(item.id)}')" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    <span>I Found This Item! (Notify Owner)</span>
+                  </button>
+                </div>
+              `}
+            ` : `
               <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center gap-2 font-medium">
                 <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
                 <span>This item has been recovered and returned to its verified owner.</span>
-              </div>
-            ` : `
-              <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
-                <div class="font-bold mb-1">Lost Item Report</div>
-                <p>If you have found this item, please report it or turn it in at the Central Library desk quoting Report #${item.id}.</p>
               </div>
             `}
           </div>
@@ -1000,6 +1146,126 @@ function promptClaim(itemId) {
   openClaimModal(itemId);
 }
 
+// -------------------------------------------------------------
+// Issue 10: "I Found This Item" Interactive Notification Flow
+// -------------------------------------------------------------
+
+function openNotifyFoundModal(itemId) {
+  const user = getLoggedInUser();
+  if (!user) {
+    openAuthModal('Please sign in to notify the owner of a found item.');
+    return;
+  }
+
+  const items = getItems();
+  const item = items.find(i => i.id === itemId);
+  if (!item) return;
+
+  const modal = document.getElementById("notify-found-modal");
+  const form = document.getElementById("notify-found-form");
+
+  form.reset();
+  form.querySelectorAll('.field-error-msg').forEach(el => el.remove());
+  form.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
+
+  document.getElementById("notify-item-id").value = item.id;
+  document.getElementById("notify-item-summary").innerHTML = `
+    <div class="w-10 h-10 rounded-lg bg-slate-200 overflow-hidden shrink-0">
+      ${item.photo ? `<img src="${escapeHTML(item.photo)}" class="w-full h-full object-cover">` : ''}
+    </div>
+    <div class="text-xs">
+      <div class="font-bold text-slate-800">${escapeHTML(item.title)}</div>
+      <div class="text-slate-500">${escapeHTML(item.building)} &bull; Reported Lost on ${escapeHTML(item.date)}</div>
+    </div>
+  `;
+
+  modal.classList.remove("hidden");
+  lucide.createIcons();
+}
+
+function closeNotifyFoundModal() {
+  const modal = document.getElementById("notify-found-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function handleNotifyFoundSubmit(e) {
+  e.preventDefault();
+  const form = document.getElementById("notify-found-form");
+
+  if (!validateForm(form)) {
+    showToast("Please fill in where the item is located.", "error");
+    return;
+  }
+
+  const user = getLoggedInUser();
+  if (!user) {
+    openAuthModal("Please sign in to continue.");
+    return;
+  }
+
+  const items = getItems();
+  const claims = getClaims();
+  const itemId = document.getElementById("notify-item-id").value;
+  const item = items.find(i => i.id === itemId);
+  const location = document.getElementById("notify-location").value.trim();
+  const message = document.getElementById("notify-message").value.trim();
+
+  if (!item) return;
+
+  // Create an automated Handover Match Claim
+  const matchClaim = {
+    id: `claim-${Date.now().toString().slice(-4)}`,
+    itemId: item.id,
+    claimantId: item.reporterId, // The person who lost it
+    claimantName: "Owner",
+    claimantEmail: "student@apex.edu",
+    submittedAnswer: "Found by fellow student / staff",
+    additionalProof: `Spotted at: ${location}`,
+    status: 'APPROVED',
+    handoverLocation: location,
+    createdAt: new Date().toISOString(),
+    messages: [
+      {
+        id: `m-${Date.now()}`,
+        senderId: user.id,
+        senderName: `${user.name} (Finder)`,
+        text: `Good news! I have located your lost belonging. ${message} (Location: ${location})`,
+        timestamp: new Date().toISOString()
+      }
+    ]
+  };
+
+  claims.unshift(matchClaim);
+  saveClaims(claims);
+
+  item.status = 'UNDER_REVIEW';
+  saveItems(items);
+
+  const notifs = getNotifications();
+  notifs.unshift({
+    id: `notif-${Date.now()}`,
+    userId: item.reporterId,
+    title: 'Good News: Someone Found Your Item!',
+    message: `${user.name} located your lost ${item.title}. Check dashboard to coordinate pickup.`,
+    timestamp: 'Just now',
+    read: false
+  });
+  saveNotifications(notifs);
+
+  const logs = getAuditLogs();
+  logs.unshift({
+    id: `audit-${Date.now()}`,
+    action: 'LOST_ITEM_LOCATED',
+    details: `${user.name} notified owner of lost item #${item.id} (${location}).`,
+    timestamp: new Date().toISOString()
+  });
+  saveAuditLogs(logs);
+
+  closeNotifyFoundModal();
+  showToast("Owner notified! Coordination channel opened in your Dashboard.", "success");
+  navigate('dashboard');
+}
+
 function renderDashboardView() {
   const user = getLoggedInUser();
   if (!user) return '';
@@ -1012,7 +1278,9 @@ function renderDashboardView() {
   const myClaims = claims.filter(c => c.claimantId === user.id);
 
   const myFoundIds = myFound.map(f => f.id);
-  const incomingClaims = claims.filter(c => myFoundIds.includes(c.itemId));
+  const myLostIds = myLost.map(l => l.id);
+  // Incoming claims for items I found OR items I lost that someone notified me about
+  const incomingClaims = claims.filter(c => myFoundIds.includes(c.itemId) || myLostIds.includes(c.itemId));
 
   return `
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -1020,9 +1288,9 @@ function renderDashboardView() {
         <div>
           <div class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">Campus Portal</div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            ${user.name}'s Dashboard
+            ${escapeHTML(user.name)}'s Dashboard
           </h1>
-          <p class="text-xs text-slate-500 mt-0.5">${user.email} &bull; ${user.badge || 'Verified Member'}</p>
+          <p class="text-xs text-slate-500 mt-0.5">${escapeHTML(user.email)} &bull; ${escapeHTML(user.badge || 'Verified Member')}</p>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="openReportModal('LOST')" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm">
@@ -1045,7 +1313,7 @@ function renderDashboardView() {
         </div>
         <div class="bg-white p-4 rounded-xl border border-slate-200">
           <div class="text-2xl font-black text-blue-600">${incomingClaims.length}</div>
-          <div class="text-xs text-slate-500">Incoming Claims to Review</div>
+          <div class="text-xs text-slate-500">Active Claims & Matches</div>
         </div>
         <div class="bg-white p-4 rounded-xl border border-slate-200">
           <div class="text-2xl font-black text-indigo-600">${myClaims.length}</div>
@@ -1059,9 +1327,9 @@ function renderDashboardView() {
             <div>
               <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
                 <i data-lucide="shield-alert" class="w-5 h-5 text-blue-600"></i>
-                <span>Claims Requiring Your Verification</span>
+                <span>Claims & Active Matches Requiring Review</span>
               </h2>
-              <p class="text-xs text-slate-500">Review answers submitted by claimants for items you found.</p>
+              <p class="text-xs text-slate-500">Coordinate recovery with students who found or claimed items.</p>
             </div>
           </div>
 
@@ -1102,11 +1370,11 @@ function renderDashboardView() {
             ${myFound.length > 0 ? myFound.map(item => `
               <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
                 <div>
-                  <h4 class="font-bold text-sm text-slate-800">${item.title}</h4>
-                  <p class="text-xs text-slate-500">${item.building} &bull; ${item.date}</p>
+                  <h4 class="font-bold text-sm text-slate-800">${escapeHTML(item.title)}</h4>
+                  <p class="text-xs text-slate-500">${escapeHTML(item.building)} &bull; ${escapeHTML(item.date)}</p>
                 </div>
                 <span class="text-xs px-2.5 py-1 rounded-full font-bold ${item.status === 'RECOVERED' ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
-                  ${item.status}
+                  ${escapeHTML(item.status)}
                 </span>
               </div>
             `).join('') : '<div class="text-xs text-slate-400 p-4 bg-white rounded-xl border border-slate-200">No found items reported yet.</div>'}
@@ -1119,11 +1387,11 @@ function renderDashboardView() {
             ${myLost.length > 0 ? myLost.map(item => `
               <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
                 <div>
-                  <h4 class="font-bold text-sm text-slate-800">${item.title}</h4>
-                  <p class="text-xs text-slate-500">${item.building} &bull; ${item.date}</p>
+                  <h4 class="font-bold text-sm text-slate-800">${escapeHTML(item.title)}</h4>
+                  <p class="text-xs text-slate-500">${escapeHTML(item.building)} &bull; ${escapeHTML(item.date)}</p>
                 </div>
                 <span class="text-xs px-2.5 py-1 rounded-full font-bold bg-amber-100 text-amber-800">
-                  ${item.status}
+                  ${escapeHTML(item.status)}
                 </span>
               </div>
             `).join('') : '<div class="text-xs text-slate-400 p-4 bg-white rounded-xl border border-slate-200">No lost items reported yet.</div>'}
@@ -1142,8 +1410,8 @@ function renderIncomingClaimCard(claim, item) {
     <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
         <div>
-          <div class="text-xs font-bold uppercase tracking-wider text-blue-600">Claim for Item #${item ? item.id : ''}</div>
-          <h3 class="text-base font-bold text-slate-900">${item ? item.title : 'Item'}</h3>
+          <div class="text-xs font-bold uppercase tracking-wider text-blue-600">Claim for Item #${item ? escapeHTML(item.id) : ''}</div>
+          <h3 class="text-base font-bold text-slate-900">${item ? escapeHTML(item.title) : 'Item'}</h3>
         </div>
         <div>
           <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -1152,36 +1420,36 @@ function renderIncomingClaimCard(claim, item) {
             claim.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' :
             'bg-amber-100 text-amber-800'
           }">
-            Status: ${claim.status}
+            Status: ${escapeHTML(claim.status)}
           </span>
         </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-4 text-xs">
         <div class="p-4 bg-slate-50 rounded-xl space-y-2">
-          <div class="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Your Secret Question & Expected Details</div>
+          <div class="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Verification Target</div>
           <div>
-            <span class="font-semibold text-slate-600">Question:</span> ${item ? item.secretQuestion : ''}
+            <span class="font-semibold text-slate-600">Question:</span> ${item ? escapeHTML(item.secretQuestion || 'General proof of ownership') : ''}
           </div>
           <div class="text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-200 font-mono">
-            <span class="font-bold">Target Answer:</span> ${item ? item.secretAnswer : ''}
+            <span class="font-bold">Target Answer:</span> ${item ? escapeHTML(item.secretAnswer || 'Owner verification') : ''}
           </div>
         </div>
 
         <div class="p-4 bg-blue-50/70 border border-blue-200 rounded-xl space-y-2">
-          <div class="font-bold text-blue-900 uppercase tracking-wider text-[10px]">Claimant's Submission</div>
+          <div class="font-bold text-blue-900 uppercase tracking-wider text-[10px]">Claimant / Match Submission</div>
           <div>
-            <span class="font-semibold text-slate-700">Claimant:</span> ${claim.claimantName} (${claim.claimantEmail})
+            <span class="font-semibold text-slate-700">Contact:</span> ${escapeHTML(claim.claimantName)} (${escapeHTML(claim.claimantEmail)})
           </div>
           <div>
-            <span class="font-semibold text-slate-700">Answer Given:</span>
+            <span class="font-semibold text-slate-700">Answer / Location Given:</span>
             <div class="p-2 bg-white rounded border border-blue-200 mt-1 font-semibold text-slate-900">
-              "${claim.submittedAnswer}"
+              "${escapeHTML(claim.submittedAnswer)}"
             </div>
           </div>
           ${claim.additionalProof ? `
             <div class="text-slate-600 mt-1">
-              <span class="font-semibold">Additional Proof:</span> ${claim.additionalProof}
+              <span class="font-semibold">Additional Details:</span> ${escapeHTML(claim.additionalProof)}
             </div>
           ` : ''}
         </div>
@@ -1189,10 +1457,10 @@ function renderIncomingClaimCard(claim, item) {
 
       ${claim.status === 'PENDING' ? `
         <div class="flex items-center justify-end gap-3 pt-2">
-          <button onclick="handleClaimReview('${claim.id}', 'REJECTED')" class="px-4 py-2 rounded-lg text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 transition">
+          <button onclick="handleClaimReview('${escapeHTML(claim.id)}', 'REJECTED')" class="px-4 py-2 rounded-lg text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 transition">
             Reject (Does not match)
           </button>
-          <button onclick="handleClaimReview('${claim.id}', 'APPROVED')" class="px-5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition flex items-center gap-1.5">
+          <button onclick="handleClaimReview('${escapeHTML(claim.id)}', 'APPROVED')" class="px-5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition flex items-center gap-1.5">
             <i data-lucide="check" class="w-4 h-4"></i> Approve & Open Handover
           </button>
         </div>
@@ -1201,7 +1469,7 @@ function renderIncomingClaimCard(claim, item) {
       ` : isCompleted ? `
         <div class="p-3 bg-emerald-50 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
           <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
-          <span>Handover completed at ${claim.handoverLocation}. Item safely returned to owner.</span>
+          <span>Handover completed at ${escapeHTML(claim.handoverLocation)}. Item safely returned to owner.</span>
         </div>
       ` : ''}
     </div>
@@ -1217,7 +1485,7 @@ function renderSubmittedClaimCard(claim, item) {
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
         <div>
           <div class="text-xs font-bold uppercase tracking-wider text-indigo-600">Submitted Claim</div>
-          <h3 class="text-base font-bold text-slate-900">${item ? item.title : 'Campus Item'}</h3>
+          <h3 class="text-base font-bold text-slate-900">${item ? escapeHTML(item.title) : 'Campus Item'}</h3>
         </div>
         <div>
           <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -1226,14 +1494,14 @@ function renderSubmittedClaimCard(claim, item) {
             claim.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' :
             'bg-amber-100 text-amber-800'
           }">
-            Status: ${claim.status}
+            Status: ${escapeHTML(claim.status)}
           </span>
         </div>
       </div>
 
       <div class="my-4 text-xs text-slate-600 bg-slate-50 p-3 rounded-xl space-y-1">
-        <div><span class="font-semibold text-slate-800">Your Answer:</span> ${claim.submittedAnswer}</div>
-        <div><span class="font-semibold text-slate-800">Handover Desk:</span> ${claim.handoverLocation || 'Central Library Desk'}</div>
+        <div><span class="font-semibold text-slate-800">Your Answer:</span> ${escapeHTML(claim.submittedAnswer)}</div>
+        <div><span class="font-semibold text-slate-800">Handover Desk:</span> ${escapeHTML(claim.handoverLocation || 'Central Library Desk')}</div>
       </div>
 
       ${isApproved ? `
@@ -1266,14 +1534,15 @@ function renderHandoverChat(claim) {
         <div class="text-[11px] text-slate-500">Private &bull; Phone numbers hidden</div>
       </div>
 
+      <!-- Messages list (Escaped for Issue 5) -->
       <div class="bg-slate-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2.5 border border-slate-200 text-xs">
         ${(claim.messages || []).map(m => {
           const isMe = user && m.senderId === user.id;
           return `
             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
-              <div class="text-[10px] text-slate-500 font-medium mb-0.5">${m.senderName}</div>
+              <div class="text-[10px] text-slate-500 font-medium mb-0.5">${escapeHTML(m.senderName)}</div>
               <div class="px-3 py-2 rounded-xl max-w-xs ${isMe ? 'bg-blue-600 text-white rounded-br-none' : 'bg-white border border-slate-200 text-slate-800 rounded-bl-none'}">
-                ${m.text}
+                ${escapeHTML(m.text)}
               </div>
             </div>
           `;
@@ -1281,17 +1550,17 @@ function renderHandoverChat(claim) {
       </div>
 
       <div class="flex items-center gap-2">
-        <input type="text" id="chat-input-${claim.id}" placeholder="Type a message to coordinate pickup..." 
-          onkeydown="if(event.key==='Enter') sendChatMessage('${claim.id}')"
+        <input type="text" id="chat-input-${escapeHTML(claim.id)}" placeholder="Type a message to coordinate pickup..." 
+          onkeydown="if(event.key==='Enter') sendChatMessage('${escapeHTML(claim.id)}')"
           class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 bg-white">
-        <button onclick="sendChatMessage('${claim.id}')" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1">
+        <button onclick="sendChatMessage('${escapeHTML(claim.id)}')" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1">
           <i data-lucide="send" class="w-3.5 h-3.5"></i>
         </button>
       </div>
 
       <div class="pt-2 flex items-center justify-between">
-        <div class="text-[11px] text-slate-500">Meetup point: <strong>${claim.handoverLocation}</strong></div>
-        <button onclick="completeHandover('${claim.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+        <div class="text-[11px] text-slate-500">Meetup point: <strong>${escapeHTML(claim.handoverLocation)}</strong></div>
+        <button onclick="completeHandover('${escapeHTML(claim.id)}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
           <i data-lucide="check-check" class="w-4 h-4"></i>
           <span>Confirm Safe Handover Completed</span>
         </button>
@@ -1374,31 +1643,31 @@ function renderAdminView() {
               ${items.map(item => `
                 <tr class="hover:bg-slate-50">
                   <td class="p-3">
-                    <div class="font-bold text-slate-900">${item.title}</div>
-                    <div class="text-[10px] text-slate-400">#${item.id} &bull; ${item.category}</div>
+                    <div class="font-bold text-slate-900">${escapeHTML(item.title)}</div>
+                    <div class="text-[10px] text-slate-400">#${escapeHTML(item.id)} &bull; ${escapeHTML(item.category)}</div>
                   </td>
                   <td class="p-3">
                     <span class="px-2 py-0.5 rounded font-bold ${item.type === 'LOST' ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'}">
-                      ${item.type}
+                      ${escapeHTML(item.type)}
                     </span>
                   </td>
-                  <td class="p-3 text-slate-600">${item.building}</td>
+                  <td class="p-3 text-slate-600">${escapeHTML(item.building)}</td>
                   <td class="p-3">
                     <span class="px-2 py-0.5 rounded font-bold ${item.status === 'ACTIVE' ? 'bg-blue-100 text-blue-800' : item.status === 'RECOVERED' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}">
-                      ${item.status}
+                      ${escapeHTML(item.status)}
                     </span>
                   </td>
                   <td class="p-3 text-right space-x-2">
                     ${item.status !== 'HIDDEN' ? `
-                      <button onclick="adminToggleHide('${item.id}', true)" class="px-2 py-1 text-rose-600 hover:bg-rose-50 rounded font-medium">
+                      <button onclick="adminToggleHide('${escapeHTML(item.id)}', true)" class="px-2 py-1 text-rose-600 hover:bg-rose-50 rounded font-medium">
                         Hide / Flag
                       </button>
                     ` : `
-                      <button onclick="adminToggleHide('${item.id}', false)" class="px-2 py-1 text-emerald-600 hover:bg-emerald-50 rounded font-medium">
+                      <button onclick="adminToggleHide('${escapeHTML(item.id)}', false)" class="px-2 py-1 text-emerald-600 hover:bg-emerald-50 rounded font-medium">
                         Unhide
                       </button>
                     `}
-                    <button onclick="adminDelete('${item.id}')" class="px-2 py-1 text-slate-500 hover:text-slate-800 rounded font-medium">
+                    <button onclick="adminDelete('${escapeHTML(item.id)}')" class="px-2 py-1 text-slate-500 hover:text-slate-800 rounded font-medium">
                       Delete
                     </button>
                   </td>
@@ -1418,8 +1687,8 @@ function renderAdminView() {
           ${auditLogs.map(log => `
             <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
               <div>
-                <span class="font-bold text-slate-800 uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-200 mr-2">${log.action}</span>
-                <span class="text-slate-700">${log.details}</span>
+                <span class="font-bold text-slate-800 uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-200 mr-2">${escapeHTML(log.action)}</span>
+                <span class="text-slate-700">${escapeHTML(log.details)}</span>
               </div>
               <div class="text-[10px] text-slate-400 shrink-0 font-mono">${new Date(log.timestamp).toLocaleTimeString()}</div>
             </div>
@@ -1431,7 +1700,7 @@ function renderAdminView() {
 }
 
 // -------------------------------------------------------------
-// Interactive Operations & Modals
+// Interactive Operations & Modals (Addresses Issue 9: Field Overwrite)
 // -------------------------------------------------------------
 
 function openReportModal(type) {
@@ -1452,10 +1721,10 @@ function openReportModal(type) {
 
   if (!modal || !form) return;
 
-  typeInput.value = type;
+  // Issue 9 Fix: Execute form.reset() FIRST before assigning typeInput.value!
   form.reset();
+  typeInput.value = type;
 
-  // Clear previous validation highlights
   form.querySelectorAll('.field-error-msg').forEach(el => el.remove());
   form.querySelectorAll('.input-error').forEach(el => el.classList.remove('input-error'));
 
@@ -1492,25 +1761,32 @@ function closeReportModal() {
   if (modal) modal.classList.add('hidden');
 }
 
-function previewPhoto(event) {
+// Issue 6: Client-Side Compressed Image Preview
+async function previewPhoto(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  const reader = new FileReader();
-  reader.onload = function(e) {
-    uploadedImageBase64 = e.target.result;
+  const feedback = document.getElementById("photo-size-feedback");
+  if (feedback) feedback.textContent = "Compressing photo via canvas...";
+
+  try {
+    const compressed = await compressImage(file, 800, 0.7);
+    uploadedImageBase64 = compressed;
     document.getElementById('image-preview').innerHTML = `
-      <img src="${uploadedImageBase64}" class="w-full h-full object-cover">
+      <img src="${compressed}" class="w-full h-full object-cover">
     `;
-  };
-  reader.readAsDataURL(file);
+    const kb = (compressed.length / 1024).toFixed(1);
+    if (feedback) feedback.textContent = `Optimized for storage (~${kb} KB)`;
+  } catch (err) {
+    showToast(err.message || "Failed to process photo.", "error");
+    if (feedback) feedback.textContent = "Photo upload error.";
+  }
 }
 
 function handleReportSubmit(e) {
   e.preventDefault();
   const form = document.getElementById('report-form');
 
-  // Inline Validation Check
   if (!validateForm(form)) {
     showToast("Please fill in all required fields indicated in red.", "error");
     return;
@@ -1589,11 +1865,11 @@ function openClaimModal(itemId) {
 
   document.getElementById('claim-item-summary').innerHTML = `
     <div class="w-10 h-10 rounded-lg bg-slate-200 overflow-hidden shrink-0">
-      ${item.photo ? `<img src="${item.photo}" class="w-full h-full object-cover">` : ''}
+      ${item.photo ? `<img src="${escapeHTML(item.photo)}" class="w-full h-full object-cover">` : ''}
     </div>
     <div class="text-xs">
-      <div class="font-bold text-slate-800">${item.title}</div>
-      <div class="text-slate-500">${item.building} &bull; ${item.date}</div>
+      <div class="font-bold text-slate-800">${escapeHTML(item.title)}</div>
+      <div class="text-slate-500">${escapeHTML(item.building)} &bull; ${escapeHTML(item.date)}</div>
     </div>
   `;
 
@@ -1817,7 +2093,6 @@ async function adminDelete(itemId) {
     return;
   }
 
-  // Non-blocking modal confirmation dialog (Replaces native confirm())
   const confirmed = await showConfirmDialog(
     "Delete Listing",
     "Are you sure you want to permanently delete this report? This action is recorded in the security audit trail.",
@@ -1852,7 +2127,6 @@ function openAuthModal(message) {
   if (message) {
     showToast(message, 'info');
   }
-  // Clear any existing error banners
   hideAuthBanners();
   if (modal) modal.classList.remove('hidden');
 }
@@ -1900,7 +2174,6 @@ async function handleAuthLogin(e) {
   const errorBanner = document.getElementById('login-error-banner');
   const errorMsg = document.getElementById('login-error-message');
 
-  // Inline field validation check
   if (!validateForm(form)) {
     return;
   }
@@ -1911,11 +2184,9 @@ async function handleAuthLogin(e) {
   const users = getUsers();
   const user = users.find(u => u.email.toLowerCase() === email);
 
-  // Compute SHA-256 hash using the email as salt
   const inputHash = await hashPassword(password, email);
 
   if (!user || user.passwordHash !== inputHash) {
-    // Non-blocking inline banner and toast (NO blocking alert())
     if (errorBanner && errorMsg) {
       errorMsg.textContent = "Invalid university email or password. Default admin: security@apex.edu / admin";
       errorBanner.classList.remove('hidden');
@@ -1935,7 +2206,6 @@ async function handleAuthRegister(e) {
   const errorBanner = document.getElementById('register-error-banner');
   const errorMsg = document.getElementById('register-error-message');
 
-  // Inline field validation check
   if (!validateForm(form)) {
     return;
   }
@@ -1947,7 +2217,6 @@ async function handleAuthRegister(e) {
 
   const users = getUsers();
   if (users.find(u => u.email.toLowerCase() === email)) {
-    // Non-blocking inline banner and toast (NO blocking alert())
     if (errorBanner && errorMsg) {
       errorMsg.textContent = "An account with this university email already exists. Please sign in.";
       errorBanner.classList.remove('hidden');
@@ -1956,7 +2225,6 @@ async function handleAuthRegister(e) {
     return;
   }
 
-  // WebCrypto SHA-256 Password Hashing - Never store plaintext!
   const passwordHash = await hashPassword(password, email);
 
   const newUser = {
@@ -1993,17 +2261,17 @@ function updateAuthUI() {
     container.innerHTML = `
       <div class="relative">
         <button onclick="toggleUserDropdown()" class="flex items-center gap-2 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition text-sm">
-          <div class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">${initials}</div>
+          <div class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">${escapeHTML(initials)}</div>
           <div class="text-left hidden sm:block">
-            <div class="font-medium text-xs leading-none">${user.name}</div>
-            <div class="text-[10px] text-slate-400 mt-0.5">${user.badge || user.role}</div>
+            <div class="font-medium text-xs leading-none">${escapeHTML(user.name)}</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${escapeHTML(user.badge || user.role)}</div>
           </div>
           <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
         </button>
         <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 z-50 text-slate-800">
           <div class="px-4 py-2 border-b border-slate-100">
-            <div class="font-bold text-xs text-slate-900">${user.name}</div>
-            <div class="text-[11px] text-slate-500">${user.email}</div>
+            <div class="font-bold text-xs text-slate-900">${escapeHTML(user.name)}</div>
+            <div class="text-[11px] text-slate-500">${escapeHTML(user.email)}</div>
           </div>
           <button onclick="navigate('dashboard'); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs flex items-center gap-2">
             <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-slate-500"></i>
@@ -2093,9 +2361,9 @@ function renderNotificationList() {
 
   listEl.innerHTML = notifs.map(n => `
     <div class="p-3 text-xs hover:bg-slate-50 transition">
-      <div class="font-bold text-slate-900">${n.title}</div>
-      <div class="text-slate-600 mt-0.5">${n.message}</div>
-      <div class="text-[10px] text-slate-400 mt-1">${n.timestamp}</div>
+      <div class="font-bold text-slate-900">${escapeHTML(n.title)}</div>
+      <div class="text-slate-600 mt-0.5">${escapeHTML(n.message)}</div>
+      <div class="text-[10px] text-slate-400 mt-1">${escapeHTML(n.timestamp)}</div>
     </div>
   `).join('');
 }
@@ -2130,7 +2398,8 @@ function updateBadges() {
   const items = getItems();
   const claims = getClaims();
   const myFoundIds = items.filter(i => i.reporterId === user.id && i.type === 'FOUND').map(i => i.id);
-  const pendingIncoming = claims.filter(c => myFoundIds.includes(c.itemId) && c.status === 'PENDING').length;
+  const myLostIds = items.filter(i => i.reporterId === user.id && i.type === 'LOST').map(i => i.id);
+  const pendingIncoming = claims.filter(c => (myFoundIds.includes(c.itemId) || myLostIds.includes(c.itemId)) && c.status === 'PENDING').length;
 
   if (claimsBadge) {
     if (pendingIncoming > 0) {
