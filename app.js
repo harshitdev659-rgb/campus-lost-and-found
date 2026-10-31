@@ -72,7 +72,7 @@ const DEFAULT_USERS = [
     id: "staff-1",
     name: "Dr. Evelyn Reed",
     email: "evelyn.reed@apex.edu",
-    passwordHash: "58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d",
+    passwordHash: "d09986ad8af4cfbb1319092e80f3a781a834512db7b78ea08ba9e5e9b98009b5",
     role: "staff",
     badge: "Faculty / University Staff"
   },
@@ -293,11 +293,23 @@ function getUsers() {
         if (!u.passwordHash) {
           u.passwordHash = u.email === "security@apex.edu"
             ? "7bbe0d843d1294ab9f88320bdde8582be0221f1f3cb038b13a4e2401690f4470"
+            : u.email === "evelyn.reed@apex.edu"
+            ? "d09986ad8af4cfbb1319092e80f3a781a834512db7b78ea08ba9e5e9b98009b5"
             : "58f2566134ee9b87379fcf369d62c8871240ead64767952d4af603f98be76b6d";
         }
       }
+      // Issue 15 Migration: Update Evelyn Reed password hash if cached with previous value
+      if (u.email === "evelyn.reed@apex.edu" && u.passwordHash !== "d09986ad8af4cfbb1319092e80f3a781a834512db7b78ea08ba9e5e9b98009b5") {
+        u.passwordHash = "d09986ad8af4cfbb1319092e80f3a781a834512db7b78ea08ba9e5e9b98009b5";
+        migrated = true;
+      }
       return u;
     });
+    // Ensure default staff member is present in user registry
+    if (!users.find(u => u.email === "evelyn.reed@apex.edu")) {
+      users.push(DEFAULT_USERS[1]);
+      migrated = true;
+    }
     if (migrated) {
       safeStorageSet(DB_USERS_KEY, JSON.stringify(users));
     }
@@ -1234,7 +1246,7 @@ function openNotifyFoundModal(itemId) {
   document.getElementById("notify-item-id").value = item.id;
   document.getElementById("notify-item-summary").innerHTML = `
     <div class="w-10 h-10 rounded-lg bg-slate-200 overflow-hidden shrink-0">
-      ${item.photo ? `<img src="${escapeHTML(item.photo)}" class="w-full h-full object-cover">` : ''}
+      ${item.photo ? `<img src="${escapeHTML(item.photo)}" alt="Item thumbnail" class="w-full h-full object-cover">` : ''}
     </div>
     <div class="text-xs">
       <div class="font-bold text-slate-800">${escapeHTML(item.title)}</div>
@@ -1542,10 +1554,10 @@ function renderIncomingClaimCard(claim, item) {
 
       ${claim.status === 'PENDING' ? `
         <div class="flex items-center justify-end gap-3 pt-2">
-          <button onclick="handleClaimReview('${escapeHTML(claim.id)}', 'REJECTED')" class="px-4 py-2 rounded-lg text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 transition">
+          <button type="button" onclick="handleClaimReview('${escapeHTML(claim.id)}', 'REJECTED')" class="px-4 py-2 rounded-lg text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 transition">
             Reject (Does not match)
           </button>
-          <button onclick="handleClaimReview('${escapeHTML(claim.id)}', 'APPROVED')" class="px-5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition flex items-center gap-1.5">
+          <button type="button" onclick="handleClaimReview('${escapeHTML(claim.id)}', 'APPROVED')" class="px-5 py-2 rounded-lg text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 shadow-sm transition flex items-center gap-1.5">
             <i data-lucide="check" class="w-4 h-4"></i> Approve & Open Handover
           </button>
         </div>
@@ -1637,14 +1649,14 @@ function renderHandoverChat(claim) {
         <input type="text" id="chat-input-${escapeHTML(claim.id)}" placeholder="Type a message to coordinate pickup..." 
           onkeydown="if(event.key==='Enter') sendChatMessage('${escapeHTML(claim.id)}')"
           class="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs focus:ring-2 focus:ring-blue-500 bg-white">
-        <button onclick="sendChatMessage('${escapeHTML(claim.id)}')" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1">
+        <button type="button" onclick="sendChatMessage('${escapeHTML(claim.id)}')" class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1" aria-label="Send message">
           <i data-lucide="send" class="w-3.5 h-3.5"></i>
         </button>
       </div>
 
       <div class="pt-2 flex items-center justify-between">
         <div class="text-[11px] text-slate-500">Meetup point: <strong>${escapeHTML(claim.handoverLocation)}</strong></div>
-        <button onclick="completeHandover('${escapeHTML(claim.id)}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+        <button type="button" onclick="completeHandover('${escapeHTML(claim.id)}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
           <i data-lucide="check-check" class="w-4 h-4"></i>
           <span>Confirm Safe Handover Completed</span>
         </button>
@@ -1901,7 +1913,7 @@ async function previewPhoto(event) {
     const compressed = await compressImage(file, 800, 0.7);
     uploadedImageBase64 = compressed;
     document.getElementById('image-preview').innerHTML = `
-      <img src="${compressed}" class="w-full h-full object-cover">
+      <img src="${compressed}" alt="Preview upload" class="w-full h-full object-cover">
     `;
     const kb = (compressed.length / 1024).toFixed(1);
     if (feedback) feedback.textContent = `Optimized for storage (~${kb} KB)`;
@@ -1999,7 +2011,7 @@ function openClaimModal(itemId) {
 
   document.getElementById('claim-item-summary').innerHTML = `
     <div class="w-10 h-10 rounded-lg bg-slate-200 overflow-hidden shrink-0">
-      ${item.photo ? `<img src="${escapeHTML(item.photo)}" class="w-full h-full object-cover">` : ''}
+      ${item.photo ? `<img src="${escapeHTML(item.photo)}" alt="Item thumbnail" class="w-full h-full object-cover">` : ''}
     </div>
     <div class="text-xs">
       <div class="font-bold text-slate-800">${escapeHTML(item.title)}</div>
