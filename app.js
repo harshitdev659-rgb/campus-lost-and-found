@@ -1,220 +1,183 @@
-// Campus Lost & Found Platform - Application Logic & State Engine
+// Campus Lost & Found Platform - Production Engine
 // Apex University Student Recovery Hub
 
-const SEED_DATA = {
-  users: [
-    {
-      id: "sarah",
-      name: "Sarah Jenkins",
-      email: "sarah.j@apex.edu",
-      role: "student",
-      badge: "Finder"
-    },
-    {
-      id: "alex",
-      name: "Alex Chen",
-      email: "alex.c@apex.edu",
-      role: "student",
-      badge: "Claimant"
-    },
-    {
-      id: "admin",
-      name: "Officer Davis",
-      email: "davis.security@apex.edu",
-      role: "admin",
-      badge: "Campus Security & Admin"
-    }
-  ],
-  items: [
-    {
-      id: "item-101",
-      type: "FOUND",
-      title: "Apple AirPods Pro (2nd Gen) in White Case",
-      category: "Electronics",
-      building: "Central Library",
-      location: "2nd Floor Silent Study Booth #14",
-      date: "2026-10-28",
-      description: "Found white wireless earbuds in case left on the side desk. Item is safe and charged.",
-      photo: "https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=600&q=80",
-      status: "ACTIVE", // ACTIVE, UNDER_REVIEW, APPROVED, RECOVERED, HIDDEN
-      reporterId: "sarah",
-      secretQuestion: "What color is the silicone lanyard loop attached to the case and what initials are inside the lid?",
-      secretAnswer: "Bright orange lanyard with initials AC",
-      claimsCount: 1,
-      createdAt: "2026-10-28T14:30:00Z"
-    },
-    {
-      id: "item-102",
-      type: "FOUND",
-      title: "Official Student University ID Card - Alex Chen",
-      category: "ID Cards",
-      building: "Student Cafeteria",
-      location: "Main Dining Hall, Table 8 near juice counter",
-      date: "2026-10-29",
-      description: "Found student RFID badge under cafeteria chair. Kept in protective sleeve.",
-      photo: "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80",
-      status: "ACTIVE",
-      reporterId: "sarah",
-      secretQuestion: "What is your student matriculation prefix (first 4 digits) and blood group on the card?",
-      secretAnswer: "2024-B and O+",
-      claimsCount: 0,
-      createdAt: "2026-10-29T11:15:00Z"
-    },
-    {
-      id: "item-103",
-      type: "LOST",
-      title: "Casio fx-991EX ClassWiz Scientific Calculator",
-      category: "Stationery",
-      building: "Engineering Block A",
-      location: "Room 302 during Advanced Calculus Midterms",
-      date: "2026-10-30",
-      description: "Black and white solar scientific calculator. Has a small NASA space shuttle sticker on the hard slide cover.",
-      photo: "https://images.unsplash.com/photo-1594980596870-8aa52a78d8cd?auto=format&fit=crop&w=600&q=80",
-      status: "ACTIVE",
-      reporterId: "alex",
-      secretQuestion: "",
-      secretAnswer: "",
-      claimsCount: 0,
-      createdAt: "2026-10-30T09:45:00Z"
-    },
-    {
-      id: "item-104",
-      type: "LOST",
-      title: "Matte Navy SwissGear Laptop Backpack",
-      category: "Bags",
-      building: "Science Lab Complex",
-      location: "Physics Lab Benches (Lab 104)",
-      date: "2026-10-27",
-      description: "Dark blue 15-inch backpack with red Swiss cross emblem. Contains laboratory notebook and thermal flask.",
-      photo: "https://images.unsplash.com/photo-1553062407-98eeb64c6a62?auto=format&fit=crop&w=600&q=80",
-      status: "ACTIVE",
-      reporterId: "alex",
-      secretQuestion: "",
-      secretAnswer: "",
-      claimsCount: 0,
-      createdAt: "2026-10-27T16:20:00Z"
-    },
-    {
-      id: "item-105",
-      type: "FOUND",
-      title: "Keychain with Blue Car Fob & Brass Dorm Key",
-      category: "Keys",
-      building: "Sports Complex",
-      location: "Bleachers near Basketball Court 2",
-      date: "2026-10-31",
-      description: "Ring with automotive remote key and dorm room key with stamped room number.",
-      photo: "https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=600&q=80",
-      status: "ACTIVE",
-      reporterId: "sarah",
-      secretQuestion: "What vehicle brand is on the key fob and what 3-digit number is stamped on the brass key?",
-      secretAnswer: "Subaru and Room 214",
-      claimsCount: 0,
-      createdAt: "2026-10-31T08:10:00Z"
-    }
-  ],
-  claims: [
-    {
-      id: "claim-501",
-      itemId: "item-101",
-      claimantId: "alex",
-      claimantName: "Alex Chen",
-      claimantEmail: "alex.c@apex.edu",
-      submittedAnswer: "Bright orange silicone loop and initials 'AC' etched inside the lid.",
-      additionalProof: "I can unlock them immediately with my paired iPhone (named Alex's AirPods Pro).",
-      status: "APPROVED", // PENDING, APPROVED, REJECTED, COMPLETED
-      handoverLocation: "Central Library Front Desk",
-      handoverTime: "Today at 4:30 PM",
-      createdAt: "2026-10-29T15:00:00Z",
-      messages: [
-        {
-          id: "m-1",
-          senderId: "sarah",
-          senderName: "Sarah Jenkins (Finder)",
-          text: "Hi Alex! Your answer matched the orange lanyard and initials perfectly.",
-          timestamp: "2026-10-29T15:10:00Z"
-        },
-        {
-          id: "m-2",
-          senderId: "alex",
-          senderName: "Alex Chen (Owner)",
-          text: "Thank you so much Sarah! I was so worried I lost them before midterms. Shall we meet at the Central Library desk?",
-          timestamp: "2026-10-29T15:15:00Z"
-        },
-        {
-          id: "m-3",
-          senderId: "sarah",
-          senderName: "Sarah Jenkins (Finder)",
-          text: "Yes, I deposited them with Librarian Mrs. Evans at the Front Desk under claim #501. You can collect anytime with your student card!",
-          timestamp: "2026-10-29T15:20:00Z"
-        }
-      ]
-    }
-  ],
-  notifications: [
-    {
-      id: "notif-1",
-      userId: "sarah",
-      title: "Claim Approved & Handover Scheduled",
-      message: "Handover set for AirPods Pro at Central Library Front Desk.",
-      timestamp: "10 mins ago",
-      read: false
-    },
-    {
-      id: "notif-2",
-      userId: "alex",
-      title: "Claim Approved!",
-      message: "Sarah approved your claim for Apple AirPods Pro (2nd Gen).",
-      timestamp: "15 mins ago",
-      read: false
-    }
-  ],
-  auditLogs: [
-    {
-      id: "audit-1",
-      action: "CLAIM_APPROVED",
-      details: "Claim #501 approved by Sarah Jenkins for item #item-101 after successful question match.",
-      timestamp: "2026-10-29T15:10:00Z"
-    },
-    {
-      id: "audit-2",
-      action: "ITEM_REPORTED",
-      details: "Found item #item-105 reported at Sports Complex by Sarah Jenkins.",
-      timestamp: "2026-10-31T08:10:00Z"
-    }
-  ]
-};
-
-// State Storage Engine (LocalStorage)
-const STORAGE_KEY = 'campus_lost_found_db_v1';
-const CURRENT_USER_KEY = 'campus_lost_found_user_v1';
-
-function getDatabase() {
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (!data) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_DATA));
-    return JSON.parse(JSON.stringify(SEED_DATA));
+const DEFAULT_USERS = [
+  {
+    id: "admin-sec",
+    name: "Officer Davis",
+    email: "security@apex.edu",
+    password: "admin",
+    role: "admin",
+    badge: "Campus Security & Admin"
+  },
+  {
+    id: "student-1",
+    name: "Rachel Adams",
+    email: "rachel.a@apex.edu",
+    password: "password123",
+    role: "student",
+    badge: "Student"
   }
-  try {
-    return JSON.parse(data);
-  } catch (e) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_DATA));
-    return JSON.parse(JSON.stringify(SEED_DATA));
+];
+
+const INITIAL_ITEMS = [
+  {
+    id: "item-101",
+    type: "FOUND",
+    title: "Apple AirPods Pro (2nd Gen) in White Case",
+    category: "Electronics",
+    building: "Central Library",
+    location: "2nd Floor Silent Study Booth #14",
+    date: "2026-10-28",
+    description: "Found white wireless earbuds in case left on the side study desk. Safely stored with battery intact.",
+    photo: "https://images.unsplash.com/photo-1600294037681-c80b4cb5b434?auto=format&fit=crop&w=600&q=80",
+    status: "ACTIVE", // ACTIVE, UNDER_REVIEW, APPROVED, RECOVERED, HIDDEN
+    reporterId: "admin-sec",
+    secretQuestion: "What color is the silicone lanyard loop attached to the case and what initials are inside the lid?",
+    secretAnswer: "Bright orange lanyard with initials AC",
+    claimsCount: 0,
+    createdAt: "2026-10-28T14:30:00Z"
+  },
+  {
+    id: "item-102",
+    type: "FOUND",
+    title: "Official Student University ID Card",
+    category: "ID Cards",
+    building: "Student Cafeteria",
+    location: "Main Dining Hall, Table 8 near juice counter",
+    date: "2026-10-29",
+    description: "Found student RFID badge under cafeteria chair. Kept in protective sleeve at information desk.",
+    photo: "https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=600&q=80",
+    status: "ACTIVE",
+    reporterId: "admin-sec",
+    secretQuestion: "What is your student matriculation prefix (first 4 digits) and blood group on the card?",
+    secretAnswer: "2024-B and O+",
+    claimsCount: 0,
+    createdAt: "2026-10-29T11:15:00Z"
+  },
+  {
+    id: "item-103",
+    type: "LOST",
+    title: "Casio fx-991EX ClassWiz Scientific Calculator",
+    category: "Stationery",
+    building: "Engineering Block A",
+    location: "Room 302 during Calculus Midterms",
+    date: "2026-10-30",
+    description: "Black and white solar scientific calculator. Has a small space shuttle sticker on the hard slide cover.",
+    photo: "https://images.unsplash.com/photo-1594980596870-8aa52a78d8cd?auto=format&fit=crop&w=600&q=80",
+    status: "ACTIVE",
+    reporterId: "student-1",
+    secretQuestion: "",
+    secretAnswer: "",
+    claimsCount: 0,
+    createdAt: "2026-10-30T09:45:00Z"
+  },
+  {
+    id: "item-104",
+    type: "FOUND",
+    title: "Keychain with Blue Car Remote & Brass Dorm Key",
+    category: "Keys",
+    building: "Sports Complex",
+    location: "Bleachers near Basketball Court 2",
+    date: "2026-10-31",
+    description: "Ring with automotive remote key and dorm room key with stamped room number.",
+    photo: "https://images.unsplash.com/photo-1582139329536-e7284fece509?auto=format&fit=crop&w=600&q=80",
+    status: "ACTIVE",
+    reporterId: "admin-sec",
+    secretQuestion: "What vehicle brand is on the key fob and what 3-digit number is stamped on the brass key?",
+    secretAnswer: "Subaru and Room 214",
+    claimsCount: 0,
+    createdAt: "2026-10-31T08:10:00Z"
   }
+];
+
+// LocalStorage Keys
+const DB_ITEMS_KEY = 'campus_items_prod';
+const DB_USERS_KEY = 'campus_users_prod';
+const DB_CLAIMS_KEY = 'campus_claims_prod';
+const DB_NOTIFS_KEY = 'campus_notifs_prod';
+const DB_AUDIT_KEY = 'campus_audit_prod';
+const SESSION_USER_KEY = 'campus_session_user';
+
+function getItems() {
+  const d = localStorage.getItem(DB_ITEMS_KEY);
+  if (!d) {
+    localStorage.setItem(DB_ITEMS_KEY, JSON.stringify(INITIAL_ITEMS));
+    return [...INITIAL_ITEMS];
+  }
+  try { return JSON.parse(d); } catch(e) { return [...INITIAL_ITEMS]; }
 }
 
-function saveDatabase(db) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+function saveItems(items) {
+  localStorage.setItem(DB_ITEMS_KEY, JSON.stringify(items));
 }
 
-function getCurrentUser() {
-  const uid = localStorage.getItem(CURRENT_USER_KEY) || 'sarah';
-  const db = getDatabase();
-  return db.users.find(u => u.id === uid) || db.users[0];
+function getUsers() {
+  const d = localStorage.getItem(DB_USERS_KEY);
+  if (!d) {
+    localStorage.setItem(DB_USERS_KEY, JSON.stringify(DEFAULT_USERS));
+    return [...DEFAULT_USERS];
+  }
+  try { return JSON.parse(d); } catch(e) { return [...DEFAULT_USERS]; }
 }
 
-function setCurrentUser(uid) {
-  localStorage.setItem(CURRENT_USER_KEY, uid);
-  updateHeaderUser();
+function saveUsers(users) {
+  localStorage.setItem(DB_USERS_KEY, JSON.stringify(users));
+}
+
+function getClaims() {
+  const d = localStorage.getItem(DB_CLAIMS_KEY);
+  if (!d) return [];
+  try { return JSON.parse(d); } catch(e) { return []; }
+}
+
+function saveClaims(claims) {
+  localStorage.setItem(DB_CLAIMS_KEY, JSON.stringify(claims));
+}
+
+function getNotifications() {
+  const d = localStorage.getItem(DB_NOTIFS_KEY);
+  if (!d) return [];
+  try { return JSON.parse(d); } catch(e) { return []; }
+}
+
+function saveNotifications(notifs) {
+  localStorage.setItem(DB_NOTIFS_KEY, JSON.stringify(notifs));
+}
+
+function getAuditLogs() {
+  const d = localStorage.getItem(DB_AUDIT_KEY);
+  if (!d) {
+    return [
+      {
+        id: "audit-init",
+        action: "REGISTRY_INITIALIZED",
+        details: "Apex University Central Lost & Found Registry online.",
+        timestamp: new Date().toISOString()
+      }
+    ];
+  }
+  try { return JSON.parse(d); } catch(e) { return []; }
+}
+
+function saveAuditLogs(logs) {
+  localStorage.setItem(DB_AUDIT_KEY, JSON.stringify(logs));
+}
+
+// Session Management
+function getLoggedInUser() {
+  const d = localStorage.getItem(SESSION_USER_KEY);
+  if (!d) return null;
+  try { return JSON.parse(d); } catch(e) { return null; }
+}
+
+function setLoggedInUser(user) {
+  if (!user) {
+    localStorage.removeItem(SESSION_USER_KEY);
+  } else {
+    localStorage.setItem(SESSION_USER_KEY, JSON.stringify(user));
+  }
+  updateAuthUI();
   renderCurrentView();
 }
 
@@ -223,16 +186,13 @@ let currentView = 'home';
 let viewParams = {};
 let uploadedImageBase64 = null;
 
-// Initialize on load
+// Initialize on Load
 document.addEventListener('DOMContentLoaded', () => {
-  // Check URL query parameters (e.g. ?view=browse or ?item=101)
   const urlParams = new URLSearchParams(window.location.search);
   const viewParam = urlParams.get('view');
-  if (viewParam) {
-    currentView = viewParam;
-  }
-  
-  updateHeaderUser();
+  if (viewParam) currentView = viewParam;
+
+  updateAuthUI();
   renderCurrentView();
   lucide.createIcons();
 });
@@ -240,7 +200,14 @@ document.addEventListener('DOMContentLoaded', () => {
 function navigate(view, params = {}) {
   currentView = view;
   viewParams = params;
-  
+
+  // Protect Dashboard & Admin routes
+  const user = getLoggedInUser();
+  if ((view === 'dashboard' || view === 'admin') && !user) {
+    openAuthModal('Please sign in to access your dashboard and records.');
+    return;
+  }
+
   // Update nav active states
   ['home', 'browse', 'dashboard', 'admin'].forEach(v => {
     const el = document.getElementById(`nav-${v}`);
@@ -292,22 +259,21 @@ function renderCurrentView() {
 // -------------------------------------------------------------
 
 function renderHomeView() {
-  const db = getDatabase();
-  const recentItems = db.items.filter(i => i.status !== 'HIDDEN').slice(0, 4);
-  const totalRecovered = db.items.filter(i => i.status === 'RECOVERED').length + 142; // seed + simulated
-  const activeFound = db.items.filter(i => i.type === 'FOUND' && i.status === 'ACTIVE').length;
-  const activeLost = db.items.filter(i => i.type === 'LOST' && i.status === 'ACTIVE').length;
+  const items = getItems();
+  const recentItems = items.filter(i => i.status !== 'HIDDEN').slice(0, 4);
+  const totalRecovered = items.filter(i => i.status === 'RECOVERED').length;
+  const activeFound = items.filter(i => i.type === 'FOUND' && i.status === 'ACTIVE').length;
+  const activeLost = items.filter(i => i.type === 'LOST' && i.status === 'ACTIVE').length;
 
   return `
     <!-- Hero Banner -->
     <section class="bg-gradient-to-b from-slate-900 via-blue-950 to-slate-900 text-white pt-16 pb-20 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      <!-- Background subtle grid pattern -->
       <div class="absolute inset-0 bg-[linear-gradient(to_right,#1e293b_1px,transparent_1px),linear-gradient(to_bottom,#1e293b_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)] opacity-30"></div>
       
       <div class="max-w-5xl mx-auto text-center relative z-10">
         <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-500/10 border border-blue-400/20 text-blue-300 text-xs font-semibold uppercase tracking-wider mb-6">
-          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-blue-400"></i>
-          <span>Official Campus Lost & Found Network</span>
+          <i data-lucide="shield-check" class="w-3.5 h-3.5 text-blue-400"></i>
+          <span>Apex University Official Registry</span>
         </div>
 
         <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white mb-6 leading-tight">
@@ -318,14 +284,14 @@ function renderHomeView() {
         </h1>
 
         <p class="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto mb-10 leading-relaxed">
-          No more chaotic WhatsApp groups or lost flyers. Apex University's official platform lets students report, search, and verify ownership through secret security questions and safe campus handover desks.
+          The centralized campus lost and found registry for students and staff. Report belongings, browse active reports, and verify ownership through secure verification questions and authorized handover desks.
         </p>
 
         <!-- Quick Search Bar -->
         <div class="max-w-2xl mx-auto bg-white p-2 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center gap-2 mb-8">
           <div class="flex items-center gap-3 w-full px-3 py-1">
             <i data-lucide="search" class="w-5 h-5 text-slate-400 shrink-0"></i>
-            <input type="text" id="hero-search-input" placeholder="Search AirPods, student ID, Casio calculator, keys..." 
+            <input type="text" id="hero-search-input" placeholder="Search AirPods, student ID, calculator, keys, bags..." 
               class="w-full text-slate-900 placeholder-slate-400 text-sm focus:outline-none"
               onkeydown="if(event.key==='Enter') executeHeroSearch()">
           </div>
@@ -347,7 +313,7 @@ function renderHomeView() {
           </button>
           <button onclick="navigate('browse')" class="px-6 py-3 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-white font-semibold text-sm border border-slate-700 transition flex items-center gap-2">
             <i data-lucide="compass" class="w-4 h-4 text-slate-300"></i>
-            <span>Browse All Listings (${db.items.length})</span>
+            <span>Browse All Listings (${items.length})</span>
           </button>
         </div>
 
@@ -376,10 +342,10 @@ function renderHomeView() {
     <!-- How Verification Works Section -->
     <section class="py-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
       <div class="text-center max-w-2xl mx-auto mb-12">
-        <h2 class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-2">Safe Campus Recovery</h2>
-        <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">How We Prevent Lost & Found Fraud</h3>
+        <h2 class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-2">Verified Campus Recovery</h2>
+        <h3 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">How Ownership Verification Works</h3>
         <p class="text-sm text-slate-600 mt-2">
-          Anyone can claim an item, but only the true owner knows the unlisted details. Here's our 3-step integrity system:
+          Protecting student personal belongings from fraudulent claims through a 3-step integrity check:
         </p>
       </div>
 
@@ -388,9 +354,9 @@ function renderHomeView() {
           <div class="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg mb-4">
             1
           </div>
-          <h4 class="font-bold text-slate-900 text-base mb-2">Item Reported with Secret Clue</h4>
+          <h4 class="font-bold text-slate-900 text-base mb-2">Found Item Registered with Secret Clue</h4>
           <p class="text-xs text-slate-600 leading-relaxed">
-            The finder posts the item with a public overview, but sets a secret question (e.g. engraving, sticker, keychain color) only the real owner can answer.
+            The finder posts the item with a public overview, but sets a confidential question (e.g. engravings, case stickers, keychain details) only the true owner can answer.
           </p>
         </div>
 
@@ -398,9 +364,9 @@ function renderHomeView() {
           <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg mb-4">
             2
           </div>
-          <h4 class="font-bold text-slate-900 text-base mb-2">Confidential Claim Review</h4>
+          <h4 class="font-bold text-slate-900 text-base mb-2">Private Verification Review</h4>
           <p class="text-xs text-slate-600 leading-relaxed">
-            The claimant answers the confidential question. The finder reviews the response inside the secure portal without revealing private phone or email details.
+            The claimant submits an answer. The finder or campus security verifies the details without disclosing personal contact numbers publicly.
           </p>
         </div>
 
@@ -408,9 +374,9 @@ function renderHomeView() {
           <div class="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg mb-4">
             3
           </div>
-          <h4 class="font-bold text-slate-900 text-base mb-2">Safe Campus Desk Handover</h4>
+          <h4 class="font-bold text-slate-900 text-base mb-2">Handover at Campus Station</h4>
           <p class="text-xs text-slate-600 leading-relaxed">
-            Once approved, the item is transferred safely at a designated campus station (Central Library Front Desk or Security Gate 1) with student ID verification.
+            Items are collected in person at designated campus desks (Central Library Front Desk or Campus Security Gate 1) with student ID verification.
           </p>
         </div>
       </div>
@@ -422,7 +388,7 @@ function renderHomeView() {
         <div class="flex items-center justify-between mb-8">
           <div>
             <h3 class="text-xl font-bold text-slate-900">Recently Reported on Campus</h3>
-            <p class="text-xs text-slate-500">Live listings updated in real-time across university zones</p>
+            <p class="text-xs text-slate-500">Live listings updated across university buildings</p>
           </div>
           <button onclick="navigate('browse')" class="text-sm font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1">
             <span>View All</span>
@@ -446,7 +412,6 @@ function renderItemCard(item) {
 
   return `
     <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-md transition flex flex-col group cursor-pointer" onclick="navigate('item-detail', { id: '${item.id}' })">
-      <!-- Image Thumbnail -->
       <div class="h-44 bg-slate-100 relative overflow-hidden">
         ${item.photo ? `
           <img src="${item.photo}" alt="${item.title}" class="w-full h-full object-cover group-hover:scale-105 transition duration-300">
@@ -473,7 +438,6 @@ function renderItemCard(item) {
         ` : ''}
       </div>
 
-      <!-- Card Body -->
       <div class="p-4 flex flex-col flex-grow">
         <div class="text-[11px] font-medium text-blue-600 uppercase tracking-wider mb-1">${item.category}</div>
         <h4 class="font-bold text-slate-900 text-sm leading-snug line-clamp-1 mb-1.5 group-hover:text-blue-600 transition">
@@ -496,14 +460,14 @@ function renderItemCard(item) {
 }
 
 function renderBrowseView() {
-  const db = getDatabase();
+  const items = getItems();
   const query = (viewParams.query || '').toLowerCase();
   const selectedType = viewParams.type || 'ALL';
   const selectedCategory = viewParams.category || 'ALL';
   const selectedBuilding = viewParams.building || 'ALL';
   const sortBy = viewParams.sort || 'NEWEST';
 
-  let filtered = db.items.filter(i => i.status !== 'HIDDEN');
+  let filtered = items.filter(i => i.status !== 'HIDDEN');
 
   if (query) {
     filtered = filtered.filter(i => 
@@ -527,7 +491,6 @@ function renderBrowseView() {
     filtered = filtered.filter(i => i.building === selectedBuilding);
   }
 
-  // Sort
   if (sortBy === 'NEWEST') {
     filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
   } else if (sortBy === 'OLDEST') {
@@ -536,7 +499,6 @@ function renderBrowseView() {
 
   return `
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <!-- Title & Search Header -->
       <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">Browse Campus Belongings</h1>
@@ -554,7 +516,6 @@ function renderBrowseView() {
 
       <!-- Filters & Controls Card -->
       <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm mb-8 space-y-4">
-        <!-- Search Input -->
         <div class="relative">
           <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3.5 top-3"></i>
           <input type="text" id="browse-search" value="${viewParams.query || ''}" 
@@ -563,9 +524,7 @@ function renderBrowseView() {
             class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500">
         </div>
 
-        <!-- Filter Row -->
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-          <!-- Type -->
           <div>
             <label class="block font-semibold text-slate-600 mb-1">Listing Type</label>
             <select onchange="applyBrowseFilter('type', this.value)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white">
@@ -575,7 +534,6 @@ function renderBrowseView() {
             </select>
           </div>
 
-          <!-- Category -->
           <div>
             <label class="block font-semibold text-slate-600 mb-1">Category</label>
             <select onchange="applyBrowseFilter('category', this.value)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white">
@@ -590,7 +548,6 @@ function renderBrowseView() {
             </select>
           </div>
 
-          <!-- Building -->
           <div>
             <label class="block font-semibold text-slate-600 mb-1">Campus Location</label>
             <select onchange="applyBrowseFilter('building', this.value)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white">
@@ -603,7 +560,6 @@ function renderBrowseView() {
             </select>
           </div>
 
-          <!-- Sort -->
           <div>
             <label class="block font-semibold text-slate-600 mb-1">Sort By</label>
             <select onchange="applyBrowseFilter('sort', this.value)" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white">
@@ -614,7 +570,6 @@ function renderBrowseView() {
         </div>
       </div>
 
-      <!-- Results Count and Clear Filter -->
       <div class="flex items-center justify-between mb-4 text-xs text-slate-500">
         <div>Showing <span class="font-bold text-slate-800">${filtered.length}</span> matching campus listings</div>
         ${(query || selectedType !== 'ALL' || selectedCategory !== 'ALL' || selectedBuilding !== 'ALL') ? `
@@ -624,7 +579,6 @@ function renderBrowseView() {
         ` : ''}
       </div>
 
-      <!-- Items Grid -->
       ${filtered.length > 0 ? `
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           ${filtered.map(item => renderItemCard(item)).join('')}
@@ -646,9 +600,9 @@ function renderBrowseView() {
 }
 
 function renderItemDetailView(itemId) {
-  const db = getDatabase();
-  const item = db.items.find(i => i.id === itemId);
-  const currentUser = getCurrentUser();
+  const items = getItems();
+  const item = items.find(i => i.id === itemId);
+  const currentUser = getLoggedInUser();
 
   if (!item) {
     return `
@@ -661,12 +615,12 @@ function renderItemDetailView(itemId) {
 
   const isLost = item.type === 'LOST';
   const badgeClass = isLost ? 'badge-lost' : 'badge-found';
-  const isReporter = item.reporterId === currentUser.id;
-  const existingClaim = db.claims.find(c => c.itemId === item.id && c.claimantId === currentUser.id);
+  const isReporter = currentUser && item.reporterId === currentUser.id;
+  const claims = getClaims();
+  const existingClaim = currentUser ? claims.find(c => c.itemId === item.id && c.claimantId === currentUser.id) : null;
 
   return `
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <!-- Breadcrumb -->
       <div class="flex items-center gap-2 text-xs text-slate-500 mb-6">
         <button onclick="navigate('browse')" class="hover:text-blue-600 flex items-center gap-1">
           <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Back to Browse
@@ -678,7 +632,6 @@ function renderItemDetailView(itemId) {
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
-        <!-- Photo Column -->
         <div class="md:col-span-6">
           <div class="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm relative">
             ${item.photo ? `
@@ -702,19 +655,17 @@ function renderItemDetailView(itemId) {
             ` : ''}
           </div>
 
-          <!-- Handover Locations Reminder -->
           <div class="mt-4 p-4 bg-blue-50 rounded-xl border border-blue-200 text-xs text-blue-900 flex items-start gap-3">
             <i data-lucide="shield-check" class="w-5 h-5 text-blue-600 shrink-0 mt-0.5"></i>
             <div>
               <span class="font-bold">Official Campus Handover Guarantee</span>
               <p class="text-[11px] text-blue-800 mt-0.5 leading-relaxed">
-                Found items must be collected in person at the Central Library Desk or Security Gate 1 with student identity verification.
+                Found items are collected in person at the Central Library Desk or Security Gate 1 with student identity verification.
               </p>
             </div>
           </div>
         </div>
 
-        <!-- Details Column -->
         <div class="md:col-span-6 flex flex-col">
           <div class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">${item.category}</div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight mb-3">
@@ -736,7 +687,6 @@ function renderItemDetailView(itemId) {
             </span>
           </div>
 
-          <!-- Description -->
           <div class="mb-6">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Description & Notes</h3>
             <p class="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-200">
@@ -744,7 +694,6 @@ function renderItemDetailView(itemId) {
             </p>
           </div>
 
-          <!-- Specific Location -->
           <div class="mb-6">
             <h3 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Campus Location Detail</h3>
             <div class="flex items-center gap-2 text-sm text-slate-800">
@@ -758,7 +707,6 @@ function renderItemDetailView(itemId) {
             </div>
           </div>
 
-          <!-- Claim Action Card -->
           <div class="mt-auto pt-6 border-t border-slate-200">
             ${item.type === 'FOUND' && item.status !== 'RECOVERED' ? `
               ${isReporter ? `
@@ -772,7 +720,7 @@ function renderItemDetailView(itemId) {
                     <i data-lucide="clock" class="w-4 h-4 text-blue-600"></i>
                     <span>Claim Submitted (${existingClaim.status})</span>
                   </div>
-                  <p class="text-blue-800">You submitted a claim for this item. Track status or chat in your <button onclick="navigate('dashboard')" class="underline font-bold">Dashboard</button>.</p>
+                  <p class="text-blue-800">You submitted a claim for this item. Track status in your <button onclick="navigate('dashboard')" class="underline font-bold">Dashboard</button>.</p>
                 </div>
               ` : `
                 <div class="p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl">
@@ -785,7 +733,7 @@ function renderItemDetailView(itemId) {
                       <i data-lucide="key" class="w-4 h-4"></i>
                     </div>
                   </div>
-                  <button onclick="openClaimModal('${item.id}')" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
+                  <button onclick="promptClaim('${item.id}')" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-md transition flex items-center justify-center gap-2">
                     <i data-lucide="shield-check" class="w-4 h-4"></i>
                     <span>Claim This Item (Verify Ownership)</span>
                   </button>
@@ -794,7 +742,7 @@ function renderItemDetailView(itemId) {
             ` : item.status === 'RECOVERED' ? `
               <div class="p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-center gap-2 font-medium">
                 <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>
-                <span>This item has been safely recovered and returned to its verified owner.</span>
+                <span>This item has been recovered and returned to its verified owner.</span>
               </div>
             ` : `
               <div class="p-4 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
@@ -809,28 +757,38 @@ function renderItemDetailView(itemId) {
   `;
 }
 
+function promptClaim(itemId) {
+  const user = getLoggedInUser();
+  if (!user) {
+    openAuthModal('Please sign in to submit an ownership claim.');
+    return;
+  }
+  openClaimModal(itemId);
+}
+
 function renderDashboardView() {
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
+  const user = getLoggedInUser();
+  if (!user) return '';
 
-  const myLost = db.items.filter(i => i.reporterId === currentUser.id && i.type === 'LOST');
-  const myFound = db.items.filter(i => i.reporterId === currentUser.id && i.type === 'FOUND');
-  const myClaims = db.claims.filter(c => c.claimantId === currentUser.id);
+  const items = getItems();
+  const claims = getClaims();
 
-  // Incoming claims for items I found
-  const myFoundItemIds = myFound.map(f => f.id);
-  const incomingClaims = db.claims.filter(c => myFoundItemIds.includes(c.itemId));
+  const myLost = items.filter(i => i.reporterId === user.id && i.type === 'LOST');
+  const myFound = items.filter(i => i.reporterId === user.id && i.type === 'FOUND');
+  const myClaims = claims.filter(c => c.claimantId === user.id);
+
+  const myFoundIds = myFound.map(f => f.id);
+  const incomingClaims = claims.filter(c => myFoundIds.includes(c.itemId));
 
   return `
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <!-- Dashboard Header -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
-          <div class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">Student Portal</div>
+          <div class="text-xs font-bold uppercase tracking-wider text-blue-600 mb-1">Campus Portal</div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Dashboard: ${currentUser.name}
+            ${user.name}'s Dashboard
           </h1>
-          <p class="text-xs text-slate-500 mt-0.5">${currentUser.email} &bull; ${currentUser.badge}</p>
+          <p class="text-xs text-slate-500 mt-0.5">${user.email} &bull; ${user.badge || 'Verified Member'}</p>
         </div>
         <div class="flex items-center gap-3">
           <button onclick="openReportModal('LOST')" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1.5 shadow-sm">
@@ -842,7 +800,6 @@ function renderDashboardView() {
         </div>
       </div>
 
-      <!-- Quick Stats -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div class="bg-white p-4 rounded-xl border border-slate-200">
           <div class="text-2xl font-black text-slate-800">${myLost.length}</div>
@@ -862,7 +819,6 @@ function renderDashboardView() {
         </div>
       </div>
 
-      <!-- Incoming Claims to Review (Finder View) -->
       ${incomingClaims.length > 0 ? `
         <div class="mb-10">
           <div class="flex items-center justify-between mb-4">
@@ -877,14 +833,13 @@ function renderDashboardView() {
 
           <div class="space-y-4">
             ${incomingClaims.map(claim => {
-              const item = db.items.find(i => i.id === claim.itemId);
+              const item = items.find(i => i.id === claim.itemId);
               return renderIncomingClaimCard(claim, item);
             }).join('')}
           </div>
         </div>
       ` : ''}
 
-      <!-- My Submitted Claims (Claimant View) -->
       <div class="mb-10">
         <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
           <i data-lucide="key" class="w-5 h-5 text-indigo-600"></i>
@@ -895,7 +850,7 @@ function renderDashboardView() {
         ${myClaims.length > 0 ? `
           <div class="space-y-4">
             ${myClaims.map(claim => {
-              const item = db.items.find(i => i.id === claim.itemId);
+              const item = items.find(i => i.id === claim.itemId);
               return renderSubmittedClaimCard(claim, item);
             }).join('')}
           </div>
@@ -906,13 +861,11 @@ function renderDashboardView() {
         `}
       </div>
 
-      <!-- My Active Reports Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <!-- My Found Items -->
         <div>
           <h3 class="font-bold text-slate-900 text-sm mb-3">Items I've Found (${myFound.length})</h3>
           <div class="space-y-3">
-            ${myFound.map(item => `
+            ${myFound.length > 0 ? myFound.map(item => `
               <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
                 <div>
                   <h4 class="font-bold text-sm text-slate-800">${item.title}</h4>
@@ -922,15 +875,14 @@ function renderDashboardView() {
                   ${item.status}
                 </span>
               </div>
-            `).join('')}
+            `).join('') : '<div class="text-xs text-slate-400 p-4 bg-white rounded-xl border border-slate-200">No found items reported yet.</div>'}
           </div>
         </div>
 
-        <!-- My Lost Items -->
         <div>
           <h3 class="font-bold text-slate-900 text-sm mb-3">Items I've Reported Lost (${myLost.length})</h3>
           <div class="space-y-3">
-            ${myLost.map(item => `
+            ${myLost.length > 0 ? myLost.map(item => `
               <div class="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
                 <div>
                   <h4 class="font-bold text-sm text-slate-800">${item.title}</h4>
@@ -940,7 +892,7 @@ function renderDashboardView() {
                   ${item.status}
                 </span>
               </div>
-            `).join('')}
+            `).join('') : '<div class="text-xs text-slate-400 p-4 bg-white rounded-xl border border-slate-200">No lost items reported yet.</div>'}
           </div>
         </div>
       </div>
@@ -956,8 +908,8 @@ function renderIncomingClaimCard(claim, item) {
     <div class="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-slate-100">
         <div>
-          <div class="text-xs font-bold uppercase tracking-wider text-blue-600">Claim for Item #${item.id}</div>
-          <h3 class="text-base font-bold text-slate-900">${item.title}</h3>
+          <div class="text-xs font-bold uppercase tracking-wider text-blue-600">Claim for Item #${item ? item.id : ''}</div>
+          <h3 class="text-base font-bold text-slate-900">${item ? item.title : 'Item'}</h3>
         </div>
         <div>
           <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
@@ -973,12 +925,12 @@ function renderIncomingClaimCard(claim, item) {
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 my-4 text-xs">
         <div class="p-4 bg-slate-50 rounded-xl space-y-2">
-          <div class="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Your Secret Question & Expected Answer</div>
+          <div class="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Your Secret Question & Expected Details</div>
           <div>
-            <span class="font-semibold text-slate-600">Question:</span> ${item.secretQuestion}
+            <span class="font-semibold text-slate-600">Question:</span> ${item ? item.secretQuestion : ''}
           </div>
           <div class="text-emerald-700 bg-emerald-50 p-2 rounded border border-emerald-200 font-mono">
-            <span class="font-bold">Target Answer:</span> ${item.secretAnswer}
+            <span class="font-bold">Target Answer:</span> ${item ? item.secretAnswer : ''}
           </div>
         </div>
 
@@ -1001,7 +953,6 @@ function renderIncomingClaimCard(claim, item) {
         </div>
       </div>
 
-      <!-- Action Buttons -->
       ${claim.status === 'PENDING' ? `
         <div class="flex items-center justify-end gap-3 pt-2">
           <button onclick="handleClaimReview('${claim.id}', 'REJECTED')" class="px-4 py-2 rounded-lg text-xs font-semibold text-rose-700 hover:bg-rose-50 border border-rose-200 transition">
@@ -1012,12 +963,11 @@ function renderIncomingClaimCard(claim, item) {
           </button>
         </div>
       ` : isApproved ? `
-        <!-- Handover Messaging Hub -->
         ${renderHandoverChat(claim)}
       ` : isCompleted ? `
         <div class="p-3 bg-emerald-50 rounded-xl text-xs text-emerald-800 font-medium flex items-center gap-2">
           <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
-          <span>Handover completed and recorded at ${claim.handoverLocation}. Item safely returned to owner.</span>
+          <span>Handover completed at ${claim.handoverLocation}. Item safely returned to owner.</span>
         </div>
       ` : ''}
     </div>
@@ -1070,7 +1020,7 @@ function renderSubmittedClaimCard(claim, item) {
 }
 
 function renderHandoverChat(claim) {
-  const currentUser = getCurrentUser();
+  const user = getLoggedInUser();
 
   return `
     <div class="mt-4 pt-4 border-t border-slate-200 space-y-3">
@@ -1082,10 +1032,9 @@ function renderHandoverChat(claim) {
         <div class="text-[11px] text-slate-500">Private &bull; Phone numbers hidden</div>
       </div>
 
-      <!-- Messages list -->
       <div class="bg-slate-50 rounded-xl p-3 max-h-48 overflow-y-auto space-y-2.5 border border-slate-200 text-xs">
         ${(claim.messages || []).map(m => {
-          const isMe = m.senderId === currentUser.id;
+          const isMe = user && m.senderId === user.id;
           return `
             <div class="flex flex-col ${isMe ? 'items-end' : 'items-start'}">
               <div class="text-[10px] text-slate-500 font-medium mb-0.5">${m.senderName}</div>
@@ -1097,7 +1046,6 @@ function renderHandoverChat(claim) {
         }).join('')}
       </div>
 
-      <!-- Send input -->
       <div class="flex items-center gap-2">
         <input type="text" id="chat-input-${claim.id}" placeholder="Type a message to coordinate pickup..." 
           onkeydown="if(event.key==='Enter') sendChatMessage('${claim.id}')"
@@ -1107,7 +1055,6 @@ function renderHandoverChat(claim) {
         </button>
       </div>
 
-      <!-- Complete Handover Button -->
       <div class="pt-2 flex items-center justify-between">
         <div class="text-[11px] text-slate-500">Meetup point: <strong>${claim.handoverLocation}</strong></div>
         <button onclick="completeHandover('${claim.id}')" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
@@ -1120,69 +1067,63 @@ function renderHandoverChat(claim) {
 }
 
 function renderAdminView() {
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
-
-  if (currentUser.role !== 'admin') {
+  const user = getLoggedInUser();
+  if (!user || user.role !== 'admin') {
     return `
       <div class="max-w-2xl mx-auto px-4 py-16 text-center">
         <div class="w-12 h-12 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3">
           <i data-lucide="shield-alert" class="w-6 h-6"></i>
         </div>
         <h2 class="text-xl font-bold text-slate-900 mb-2">Campus Security & Admin Portal Only</h2>
-        <p class="text-xs text-slate-500 mb-4">You are currently logged in as <strong>${currentUser.name} (${currentUser.role})</strong>. Please switch to the Officer Davis admin account using the top-right profile switcher to access moderation and security controls.</p>
-        <button onclick="switchUser('admin')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition">
-          Switch to Officer Davis (Admin)
+        <p class="text-xs text-slate-500 mb-4">You must be logged in as an authorized Campus Security administrator to access content moderation and audit logs.</p>
+        <button onclick="openAuthModal('Sign in with Campus Security credentials')" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition">
+          Sign In as Officer Davis
         </button>
       </div>
     `;
   }
 
+  const items = getItems();
+  const claims = getClaims();
+  const auditLogs = getAuditLogs();
+
   return `
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <!-- Admin Header -->
       <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
         <div>
           <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-purple-100 text-purple-800 text-[11px] font-bold uppercase tracking-wider mb-1">
             <i data-lucide="shield" class="w-3.5 h-3.5"></i> Campus Security Command
           </div>
           <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Campus Moderation & Audit Console
+            Security Moderation & Audit Console
           </h1>
           <p class="text-xs text-slate-500 mt-0.5">Manage reported content, resolve claims, and inspect security audit trails.</p>
         </div>
-        <div class="flex items-center gap-2">
-          <button onclick="resetDemoData()" class="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5">
-            <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Reset All Data
-          </button>
-        </div>
       </div>
 
-      <!-- Admin Metrics -->
       <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         <div class="bg-white p-4 rounded-xl border border-slate-200">
-          <div class="text-2xl font-black text-slate-900">${db.items.length}</div>
+          <div class="text-2xl font-black text-slate-900">${items.length}</div>
           <div class="text-xs text-slate-500">Total System Reports</div>
         </div>
         <div class="bg-white p-4 rounded-xl border border-slate-200">
-          <div class="text-2xl font-black text-blue-600">${db.claims.length}</div>
+          <div class="text-2xl font-black text-blue-600">${claims.length}</div>
           <div class="text-xs text-slate-500">Total Claim Submissions</div>
         </div>
         <div class="bg-white p-4 rounded-xl border border-slate-200">
-          <div class="text-2xl font-black text-emerald-600">${db.items.filter(i => i.status === 'RECOVERED').length + 142}</div>
+          <div class="text-2xl font-black text-emerald-600">${items.filter(i => i.status === 'RECOVERED').length}</div>
           <div class="text-xs text-slate-500">Recoveries Handed Over</div>
         </div>
         <div class="bg-white p-4 rounded-xl border border-slate-200">
-          <div class="text-2xl font-black text-purple-600">${db.auditLogs.length}</div>
+          <div class="text-2xl font-black text-purple-600">${auditLogs.length}</div>
           <div class="text-xs text-slate-500">Security Audit Logs</div>
         </div>
       </div>
 
-      <!-- Moderation Table -->
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-8">
         <div class="p-4 border-b border-slate-200 flex items-center justify-between">
           <h3 class="font-bold text-slate-900 text-sm">Active Campus Listings Moderation</h3>
-          <span class="text-xs text-slate-500">${db.items.length} listings</span>
+          <span class="text-xs text-slate-500">${items.length} listings</span>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left text-xs">
@@ -1196,7 +1137,7 @@ function renderAdminView() {
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-100">
-              ${db.items.map(item => `
+              ${items.map(item => `
                 <tr class="hover:bg-slate-50">
                   <td class="p-3">
                     <div class="font-bold text-slate-900">${item.title}</div>
@@ -1234,14 +1175,13 @@ function renderAdminView() {
         </div>
       </div>
 
-      <!-- Security Audit Trail -->
       <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
         <h3 class="font-bold text-slate-900 text-sm mb-3 flex items-center gap-2">
           <i data-lucide="file-text" class="w-4 h-4 text-slate-500"></i>
           <span>Security Audit Trail</span>
         </h3>
         <div class="space-y-2 max-h-60 overflow-y-auto text-xs">
-          ${db.auditLogs.map(log => `
+          ${auditLogs.map(log => `
             <div class="p-2.5 rounded-lg bg-slate-50 border border-slate-200/80 flex items-start justify-between gap-4">
               <div>
                 <span class="font-bold text-slate-800 uppercase text-[10px] px-1.5 py-0.5 rounded bg-slate-200 mr-2">${log.action}</span>
@@ -1261,6 +1201,12 @@ function renderAdminView() {
 // -------------------------------------------------------------
 
 function openReportModal(type) {
+  const user = getLoggedInUser();
+  if (!user) {
+    openAuthModal(`Please sign in with your campus account to report a ${type.toLowerCase()} item.`);
+    return;
+  }
+
   const modal = document.getElementById('report-modal');
   const typeInput = document.getElementById('report-type');
   const title = document.getElementById('modal-title');
@@ -1275,8 +1221,6 @@ function openReportModal(type) {
   document.getElementById('report-form').reset();
   uploadedImageBase64 = null;
   document.getElementById('image-preview').innerHTML = '<i data-lucide="image" class="w-6 h-6 text-slate-400"></i>';
-
-  // Default date to today
   document.getElementById('report-date').value = new Date().toISOString().split('T')[0];
 
   if (type === 'LOST') {
@@ -1324,9 +1268,13 @@ function previewPhoto(event) {
 
 function handleReportSubmit(e) {
   e.preventDefault();
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
+  const user = getLoggedInUser();
+  if (!user) {
+    openAuthModal();
+    return;
+  }
 
+  const items = getItems();
   const type = document.getElementById('report-type').value;
   const title = document.getElementById('report-item-title').value.trim();
   const category = document.getElementById('report-category').value;
@@ -1350,33 +1298,33 @@ function handleReportSubmit(e) {
       ? 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80'
       : 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&w=600&q=80'),
     status: 'ACTIVE',
-    reporterId: currentUser.id,
+    reporterId: user.id,
     secretQuestion: secretQuestion,
     secretAnswer: secretAnswer,
     claimsCount: 0,
     createdAt: new Date().toISOString()
   };
 
-  db.items.unshift(newItem);
+  items.unshift(newItem);
+  saveItems(items);
 
-  // Add audit log
-  db.auditLogs.unshift({
+  const logs = getAuditLogs();
+  logs.unshift({
     id: `audit-${Date.now()}`,
     action: `ITEM_${type}_REPORTED`,
-    details: `${type} item #${newItem.id} (${newItem.title}) reported by ${currentUser.name} at ${building}.`,
+    details: `${type} item #${newItem.id} (${newItem.title}) reported by ${user.name} at ${building}.`,
     timestamp: new Date().toISOString()
   });
+  saveAuditLogs(logs);
 
-  saveDatabase(db);
   closeReportModal();
   showToast(`Successfully reported ${type.toLowerCase()} item!`, 'success');
-
   navigate('browse', { type: type });
 }
 
 function openClaimModal(itemId) {
-  const db = getDatabase();
-  const item = db.items.find(i => i.id === itemId);
+  const items = getItems();
+  const item = items.find(i => i.id === itemId);
   if (!item) return;
 
   const modal = document.getElementById('claim-modal');
@@ -1406,11 +1354,16 @@ function closeClaimModal() {
 
 function handleClaimSubmit(e) {
   e.preventDefault();
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
+  const user = getLoggedInUser();
+  if (!user) {
+    openAuthModal();
+    return;
+  }
 
+  const items = getItems();
+  const claims = getClaims();
   const itemId = document.getElementById('claim-item-id').value;
-  const item = db.items.find(i => i.id === itemId);
+  const item = items.find(i => i.id === itemId);
   const answer = document.getElementById('claim-answer').value.trim();
   const additionalProof = document.getElementById('claim-additional-proof').value.trim();
 
@@ -1419,94 +1372,102 @@ function handleClaimSubmit(e) {
   const newClaim = {
     id: `claim-${Date.now().toString().slice(-4)}`,
     itemId: item.id,
-    claimantId: currentUser.id,
-    claimantName: currentUser.name,
-    claimantEmail: currentUser.email,
+    claimantId: user.id,
+    claimantName: user.name,
+    claimantEmail: user.email,
     submittedAnswer: answer,
     additionalProof: additionalProof,
     status: 'PENDING',
     handoverLocation: 'Central Library Front Desk',
-    handoverTime: 'Pending finder approval',
     createdAt: new Date().toISOString(),
     messages: [
       {
         id: `m-${Date.now()}`,
-        senderId: currentUser.id,
-        senderName: `${currentUser.name} (Claimant)`,
+        senderId: user.id,
+        senderName: `${user.name} (Claimant)`,
         text: `Hello! I have submitted an ownership claim with my verification answer.`,
         timestamp: new Date().toISOString()
       }
     ]
   };
 
-  db.claims.unshift(newClaim);
-  item.status = 'UNDER_REVIEW';
+  claims.unshift(newClaim);
+  saveClaims(claims);
 
-  // Notification for finder
-  db.notifications.unshift({
+  item.status = 'UNDER_REVIEW';
+  saveItems(items);
+
+  const notifs = getNotifications();
+  notifs.unshift({
     id: `notif-${Date.now()}`,
     userId: item.reporterId,
     title: 'New Ownership Claim Submitted',
-    message: `${currentUser.name} submitted a claim for ${item.title}.`,
+    message: `${user.name} submitted a claim for ${item.title}.`,
     timestamp: 'Just now',
     read: false
   });
+  saveNotifications(notifs);
 
-  // Audit log
-  db.auditLogs.unshift({
+  const logs = getAuditLogs();
+  logs.unshift({
     id: `audit-${Date.now()}`,
     action: 'CLAIM_SUBMITTED',
-    details: `Claim #${newClaim.id} submitted by ${currentUser.name} for item #${item.id}.`,
+    details: `Claim #${newClaim.id} submitted by ${user.name} for item #${item.id}.`,
     timestamp: new Date().toISOString()
   });
+  saveAuditLogs(logs);
 
-  saveDatabase(db);
   closeClaimModal();
   showToast('Claim submitted! The finder has been notified.', 'success');
-
   navigate('dashboard');
 }
 
 function handleClaimReview(claimId, newStatus) {
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
-  const claim = db.claims.find(c => c.id === claimId);
+  const user = getLoggedInUser();
+  const claims = getClaims();
+  const items = getItems();
+  const claim = claims.find(c => c.id === claimId);
   if (!claim) return;
 
-  const item = db.items.find(i => i.id === claim.itemId);
+  const item = items.find(i => i.id === claim.itemId);
 
   claim.status = newStatus;
   if (newStatus === 'APPROVED') {
     if (item) item.status = 'UNDER_REVIEW';
     claim.messages.push({
       id: `m-${Date.now()}`,
-      senderId: currentUser.id,
-      senderName: `${currentUser.name} (Finder)`,
+      senderId: user ? user.id : 'finder',
+      senderName: `${user ? user.name : 'Finder'} (Finder)`,
       text: `Your answer matched! I've approved your claim. Let's coordinate pickup at ${claim.handoverLocation}.`,
       timestamp: new Date().toISOString()
     });
 
-    db.notifications.unshift({
+    const notifs = getNotifications();
+    notifs.unshift({
       id: `notif-${Date.now()}`,
       userId: claim.claimantId,
       title: 'Claim Approved!',
-      message: `${currentUser.name} approved your claim for ${item ? item.title : 'item'}.`,
+      message: `Your claim for ${item ? item.title : 'item'} was approved.`,
       timestamp: 'Just now',
       read: false
     });
+    saveNotifications(notifs);
   } else if (newStatus === 'REJECTED') {
     if (item) item.status = 'ACTIVE';
   }
 
-  // Audit
-  db.auditLogs.unshift({
+  saveClaims(claims);
+  saveItems(items);
+
+  const logs = getAuditLogs();
+  logs.unshift({
     id: `audit-${Date.now()}`,
     action: `CLAIM_${newStatus}`,
-    details: `Claim #${claim.id} set to ${newStatus} by ${currentUser.name}.`,
+    details: `Claim #${claim.id} set to ${newStatus} by ${user ? user.name : 'reviewer'}.`,
     timestamp: new Date().toISOString()
   });
+  saveAuditLogs(logs);
 
-  saveDatabase(db);
   showToast(`Claim marked as ${newStatus}!`, 'info');
   renderCurrentView();
 }
@@ -1516,73 +1477,234 @@ function sendChatMessage(claimId) {
   if (!input || !input.value.trim()) return;
 
   const text = input.value.trim();
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
-  const claim = db.claims.find(c => c.id === claimId);
+  const user = getLoggedInUser();
+  const claims = getClaims();
+  const claim = claims.find(c => c.id === claimId);
 
   if (!claim) return;
 
   claim.messages = claim.messages || [];
   claim.messages.push({
     id: `m-${Date.now()}`,
-    senderId: currentUser.id,
-    senderName: `${currentUser.name} (${currentUser.role === 'admin' ? 'Security' : currentUser.id === claim.claimantId ? 'Owner' : 'Finder'})`,
+    senderId: user ? user.id : 'anon',
+    senderName: user ? `${user.name} (${user.role === 'admin' ? 'Security' : user.id === claim.claimantId ? 'Owner' : 'Finder'})` : 'User',
     text: text,
     timestamp: new Date().toISOString()
   });
 
-  saveDatabase(db);
+  saveClaims(claims);
   renderCurrentView();
 }
 
 function completeHandover(claimId) {
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
-  const claim = db.claims.find(c => c.id === claimId);
+  const claims = getClaims();
+  const items = getItems();
+  const claim = claims.find(c => c.id === claimId);
   if (!claim) return;
 
-  const item = db.items.find(i => i.id === claim.itemId);
+  const item = items.find(i => i.id === claim.itemId);
   claim.status = 'COMPLETED';
   if (item) item.status = 'RECOVERED';
 
-  // Audit
-  db.auditLogs.unshift({
+  saveClaims(claims);
+  saveItems(items);
+
+  const logs = getAuditLogs();
+  logs.unshift({
     id: `audit-${Date.now()}`,
     action: 'HANDOVER_COMPLETED',
     details: `Safe campus handover confirmed for item #${item ? item.id : ''} at ${claim.handoverLocation}.`,
     timestamp: new Date().toISOString()
   });
+  saveAuditLogs(logs);
 
-  saveDatabase(db);
   showToast('Handover confirmed! Item safely returned to owner.', 'success');
   renderCurrentView();
 }
 
 function adminToggleHide(itemId, shouldHide) {
-  const db = getDatabase();
-  const item = db.items.find(i => i.id === itemId);
+  const items = getItems();
+  const item = items.find(i => i.id === itemId);
   if (!item) return;
 
   item.status = shouldHide ? 'HIDDEN' : 'ACTIVE';
-  db.auditLogs.unshift({
+  saveItems(items);
+
+  const logs = getAuditLogs();
+  logs.unshift({
     id: `audit-${Date.now()}`,
     action: shouldHide ? 'ITEM_MODERATED_HIDDEN' : 'ITEM_UNHIDDEN',
-    details: `Item #${item.id} was ${shouldHide ? 'hidden from public registry' : 'restored'} by Admin.`,
+    details: `Item #${item.id} was ${shouldHide ? 'hidden' : 'restored'} by Admin.`,
     timestamp: new Date().toISOString()
   });
+  saveAuditLogs(logs);
 
-  saveDatabase(db);
   showToast(shouldHide ? 'Item listing hidden.' : 'Item listing restored.', 'info');
   renderCurrentView();
 }
 
 function adminDelete(itemId) {
   if (!confirm("Are you sure you want to permanently delete this report?")) return;
-  const db = getDatabase();
-  db.items = db.items.filter(i => i.id !== itemId);
-  saveDatabase(db);
+  let items = getItems();
+  items = items.filter(i => i.id !== itemId);
+  saveItems(items);
   showToast('Item deleted by Admin.', 'info');
   renderCurrentView();
+}
+
+// -------------------------------------------------------------
+// Authentication System
+// -------------------------------------------------------------
+
+function openAuthModal(message) {
+  const modal = document.getElementById('auth-modal');
+  if (message) {
+    showToast(message, 'info');
+  }
+  if (modal) modal.classList.remove('hidden');
+}
+
+function closeAuthModal() {
+  const modal = document.getElementById('auth-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function setAuthTab(tab) {
+  const loginForm = document.getElementById('login-form');
+  const registerForm = document.getElementById('register-form');
+  const tabLogin = document.getElementById('tab-login');
+  const tabRegister = document.getElementById('tab-register');
+  const authTitle = document.getElementById('auth-title');
+
+  if (tab === 'login') {
+    loginForm.classList.remove('hidden');
+    registerForm.classList.add('hidden');
+    tabLogin.className = 'flex-1 py-2 text-xs font-bold text-blue-600 border-b-2 border-blue-600';
+    tabRegister.className = 'flex-1 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent';
+    authTitle.textContent = 'Sign in to CampusFind';
+  } else {
+    loginForm.classList.add('hidden');
+    registerForm.classList.remove('hidden');
+    tabLogin.className = 'flex-1 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent';
+    tabRegister.className = 'flex-1 py-2 text-xs font-bold text-blue-600 border-b-2 border-blue-600';
+    authTitle.textContent = 'Register Student Account';
+  }
+}
+
+function handleAuthLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const password = document.getElementById('login-password').value;
+
+  const users = getUsers();
+  const user = users.find(u => u.email.toLowerCase() === email);
+
+  if (!user || user.password !== password) {
+    alert("Invalid credentials. If using the default admin account: security@apex.edu / admin");
+    return;
+  }
+
+  setLoggedInUser(user);
+  closeAuthModal();
+  showToast(`Welcome back, ${user.name}!`, 'success');
+}
+
+function handleAuthRegister(e) {
+  e.preventDefault();
+  const name = document.getElementById('register-name').value.trim();
+  const email = document.getElementById('register-email').value.trim().toLowerCase();
+  const role = document.getElementById('register-role').value;
+  const password = document.getElementById('register-password').value;
+
+  const users = getUsers();
+  if (users.find(u => u.email.toLowerCase() === email)) {
+    alert("An account with this email already exists. Please sign in.");
+    return;
+  }
+
+  const newUser = {
+    id: `usr-${Date.now().toString().slice(-4)}`,
+    name: name,
+    email: email,
+    password: password,
+    role: role,
+    badge: role === 'staff' ? 'University Staff' : 'Student'
+  };
+
+  users.push(newUser);
+  saveUsers(users);
+
+  setLoggedInUser(newUser);
+  closeAuthModal();
+  showToast(`Account created! Welcome, ${newUser.name}.`, 'success');
+}
+
+function handleLogout() {
+  setLoggedInUser(null);
+  showToast('You have been signed out.', 'info');
+  navigate('home');
+}
+
+function updateAuthUI() {
+  const container = document.getElementById('auth-nav-container');
+  if (!container) return;
+
+  const user = getLoggedInUser();
+
+  if (user) {
+    const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2);
+    container.innerHTML = `
+      <div class="relative">
+        <button onclick="toggleUserDropdown()" class="flex items-center gap-2 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition text-sm">
+          <div class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">${initials}</div>
+          <div class="text-left hidden sm:block">
+            <div class="font-medium text-xs leading-none">${user.name}</div>
+            <div class="text-[10px] text-slate-400 mt-0.5">${user.badge || user.role}</div>
+          </div>
+          <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+        </button>
+        <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 z-50 text-slate-800">
+          <div class="px-4 py-2 border-b border-slate-100">
+            <div class="font-bold text-xs text-slate-900">${user.name}</div>
+            <div class="text-[11px] text-slate-500">${user.email}</div>
+          </div>
+          <button onclick="navigate('dashboard'); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs flex items-center gap-2">
+            <i data-lucide="layout-dashboard" class="w-3.5 h-3.5 text-slate-500"></i>
+            <span>My Dashboard & Claims</span>
+          </button>
+          ${user.role === 'admin' ? `
+            <button onclick="navigate('admin'); toggleUserDropdown()" class="w-full text-left px-4 py-2 hover:bg-slate-50 text-xs flex items-center gap-2 text-purple-700 font-semibold">
+              <i data-lucide="shield" class="w-3.5 h-3.5"></i>
+              <span>Security & Moderation</span>
+            </button>
+          ` : ''}
+          <div class="border-t border-slate-100 my-1"></div>
+          <button onclick="handleLogout()" class="w-full text-left px-4 py-2 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2">
+            <i data-lucide="log-out" class="w-3.5 h-3.5"></i>
+            <span>Sign Out</span>
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    container.innerHTML = `
+      <div class="flex items-center gap-2">
+        <button onclick="openAuthModal()" class="px-3 py-1.5 text-xs font-semibold text-slate-200 hover:text-white hover:bg-slate-800 rounded-lg transition">
+          Sign In
+        </button>
+        <button onclick="openAuthModal(); setAuthTab('register')" class="px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm transition">
+          Register
+        </button>
+      </div>
+    `;
+  }
+
+  lucide.createIcons();
+}
+
+function toggleUserDropdown() {
+  const el = document.getElementById('user-dropdown');
+  if (el) el.classList.toggle('hidden');
 }
 
 // -------------------------------------------------------------
@@ -1606,34 +1728,8 @@ function clearBrowseFilters() {
 }
 
 // -------------------------------------------------------------
-// Header & User Switching
+// Notifications & Badges
 // -------------------------------------------------------------
-
-function updateHeaderUser() {
-  const user = getCurrentUser();
-  const nameEl = document.getElementById('current-user-name');
-  const roleEl = document.getElementById('current-user-role');
-  const avatarEl = document.getElementById('current-user-avatar');
-
-  if (nameEl) nameEl.textContent = user.name;
-  if (roleEl) roleEl.textContent = user.badge;
-  if (avatarEl) {
-    const initials = user.name.split(' ').map(n => n[0]).join('').substring(0, 2);
-    avatarEl.textContent = initials;
-  }
-}
-
-function toggleUserDropdown() {
-  const el = document.getElementById('user-dropdown');
-  if (el) el.classList.toggle('hidden');
-}
-
-function switchUser(uid) {
-  setCurrentUser(uid);
-  const el = document.getElementById('user-dropdown');
-  if (el) el.classList.add('hidden');
-  showToast(`Switched account to ${getCurrentUser().name}`, 'info');
-}
 
 function toggleNotifications() {
   const el = document.getElementById('notif-dropdown');
@@ -1643,18 +1739,22 @@ function toggleNotifications() {
 }
 
 function renderNotificationList() {
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
+  const user = getLoggedInUser();
   const listEl = document.getElementById('notif-list');
   if (!listEl) return;
 
-  const userNotifs = db.notifications.filter(n => n.userId === currentUser.id);
-  if (userNotifs.length === 0) {
+  if (!user) {
+    listEl.innerHTML = '<div class="p-4 text-center text-xs text-slate-400">Please sign in to view notifications</div>';
+    return;
+  }
+
+  const notifs = getNotifications().filter(n => n.userId === user.id);
+  if (notifs.length === 0) {
     listEl.innerHTML = '<div class="p-4 text-center text-xs text-slate-400">No new notifications</div>';
     return;
   }
 
-  listEl.innerHTML = userNotifs.map(n => `
+  listEl.innerHTML = notifs.map(n => `
     <div class="p-3 text-xs hover:bg-slate-50 transition">
       <div class="font-bold text-slate-900">${n.title}</div>
       <div class="text-slate-600 mt-0.5">${n.message}</div>
@@ -1664,29 +1764,36 @@ function renderNotificationList() {
 }
 
 function clearNotifications() {
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
-  db.notifications = db.notifications.filter(n => n.userId !== currentUser.id);
-  saveDatabase(db);
+  const user = getLoggedInUser();
+  if (!user) return;
+  let notifs = getNotifications();
+  notifs = notifs.filter(n => n.userId !== user.id);
+  saveNotifications(notifs);
   renderNotificationList();
   updateBadges();
 }
 
 function updateBadges() {
-  const db = getDatabase();
-  const currentUser = getCurrentUser();
+  const user = getLoggedInUser();
   const notifBadge = document.getElementById('notif-badge');
   const claimsBadge = document.getElementById('nav-claims-badge');
 
-  const unreadNotifs = db.notifications.filter(n => n.userId === currentUser.id);
+  if (!user) {
+    if (notifBadge) notifBadge.classList.add('hidden');
+    if (claimsBadge) claimsBadge.classList.add('hidden');
+    return;
+  }
+
+  const notifs = getNotifications().filter(n => n.userId === user.id && !n.read);
   if (notifBadge) {
-    if (unreadNotifs.length > 0) notifBadge.classList.remove('hidden');
+    if (notifs.length > 0) notifBadge.classList.remove('hidden');
     else notifBadge.classList.add('hidden');
   }
 
-  // Pending incoming claims for current user
-  const myFoundIds = db.items.filter(i => i.reporterId === currentUser.id && i.type === 'FOUND').map(i => i.id);
-  const pendingIncoming = db.claims.filter(c => myFoundIds.includes(c.itemId) && c.status === 'PENDING').length;
+  const items = getItems();
+  const claims = getClaims();
+  const myFoundIds = items.filter(i => i.reporterId === user.id && i.type === 'FOUND').map(i => i.id);
+  const pendingIncoming = claims.filter(c => myFoundIds.includes(c.itemId) && c.status === 'PENDING').length;
 
   if (claimsBadge) {
     if (pendingIncoming > 0) {
@@ -1701,14 +1808,6 @@ function updateBadges() {
 function toggleMobileMenu() {
   const el = document.getElementById('mobile-menu');
   if (el) el.classList.toggle('hidden');
-}
-
-function resetDemoData() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(SEED_DATA));
-  localStorage.setItem(CURRENT_USER_KEY, 'sarah');
-  updateHeaderUser();
-  showToast('Reset all database state to initial demo seed!', 'info');
-  navigate('home');
 }
 
 function showToast(message, type = 'info') {

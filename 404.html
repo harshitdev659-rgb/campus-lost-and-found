@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Campus Lost & Found Platform | Official University Portal</title>
-  <meta name="description" content="Secure, centralized campus lost and found platform for university students, faculty, and campus security with anti-fraud verification and safe handover.">
+  <meta name="description" content="Centralized campus lost and found platform for university students, faculty, and campus security with verified ownership protection and safe handover.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%231e3a8a'><path d='M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V13H5V8.26l7-3.89v8.63z'/></svg>">
   <!-- Tailwind CSS via CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -61,7 +61,7 @@
   <!-- Top Announcement Bar -->
   <div class="bg-blue-900 text-blue-100 text-xs py-1.5 px-4 text-center font-medium flex items-center justify-center gap-2 border-b border-blue-800">
     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-700 text-blue-100">Official</span>
-    <span>Apex University Centralized Lost & Found Registry &bull; 24/7 Verified Ownership Protection</span>
+    <span>Apex University Centralized Lost & Found Registry &bull; Verified Ownership Protection</span>
     <span class="hidden md:inline">&bull; Handover Desks at Central Library & Campus Security Gate 1</span>
   </div>
 
@@ -77,7 +77,7 @@
           <div>
             <div class="font-bold text-lg leading-tight tracking-tight flex items-center gap-2">
               <span>CampusFind</span>
-              <span class="text-xs px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-medium border border-blue-500/30">UniPort</span>
+              <span class="text-xs px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 font-medium border border-blue-500/30">Official</span>
             </div>
             <div class="text-[11px] text-slate-400">Apex University Registry</div>
           </div>
@@ -102,17 +102,17 @@
             <span id="nav-claims-badge" class="hidden absolute -top-1 -right-1 w-5 h-5 bg-blue-500 text-white text-[10px] rounded-full flex items-center justify-center font-bold">1</span>
           </button>
           <button onclick="navigate('admin')" id="nav-admin" class="px-3 py-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition flex items-center gap-1.5">
-            <i data-lucide="shield" class="w-4 h-4"></i> Admin
+            <i data-lucide="shield" class="w-4 h-4"></i> Security & Admin
           </button>
         </nav>
 
-        <!-- Right Side: Active User Switcher & Notifications -->
+        <!-- Right Side: Real Auth & Notifications -->
         <div class="flex items-center space-x-3">
           <!-- Notification Bell -->
-          <div class="relative">
+          <div class="relative" id="notif-wrapper">
             <button onclick="toggleNotifications()" class="p-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800 transition relative">
               <i data-lucide="bell" class="w-5 h-5"></i>
-              <span id="notif-badge" class="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse"></span>
+              <span id="notif-badge" class="hidden absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse"></span>
             </button>
             <!-- Notification Dropdown -->
             <div id="notif-dropdown" class="hidden absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 z-50 text-slate-800">
@@ -126,47 +126,9 @@
             </div>
           </div>
 
-          <!-- User Profile / Switcher -->
-          <div class="relative">
-            <button onclick="toggleUserDropdown()" class="flex items-center gap-2 bg-slate-800/90 hover:bg-slate-700 text-slate-200 px-3 py-1.5 rounded-lg border border-slate-700 transition text-sm">
-              <div id="current-user-avatar" class="w-6 h-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center font-bold">SJ</div>
-              <div class="text-left hidden sm:block">
-                <div id="current-user-name" class="font-medium text-xs leading-none">Sarah Jenkins</div>
-                <div id="current-user-role" class="text-[10px] text-slate-400 mt-0.5">Student (Finder)</div>
-              </div>
-              <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
-            </button>
-            <!-- Dropdown -->
-            <div id="user-dropdown" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-slate-200 py-2 z-50 text-slate-800">
-              <div class="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400 border-b border-slate-100">
-                Switch Test Account (Instant)
-              </div>
-              <button onclick="switchUser('sarah')" class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2.5">
-                <div class="w-7 h-7 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">SJ</div>
-                <div>
-                  <div class="font-medium text-xs">Sarah Jenkins</div>
-                  <div class="text-[11px] text-slate-500">Student Finder (Reports & Claims)</div>
-                </div>
-              </button>
-              <button onclick="switchUser('alex')" class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2.5">
-                <div class="w-7 h-7 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs">AC</div>
-                <div>
-                  <div class="font-medium text-xs">Alex Chen</div>
-                  <div class="text-[11px] text-slate-500">Student Claimant (Lost Owner)</div>
-                </div>
-              </button>
-              <button onclick="switchUser('admin')" class="w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center gap-2.5">
-                <div class="w-7 h-7 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">OD</div>
-                <div>
-                  <div class="font-medium text-xs">Officer Davis</div>
-                  <div class="text-[11px] text-slate-500">Campus Security & Admin</div>
-                </div>
-              </button>
-              <div class="border-t border-slate-100 my-1"></div>
-              <button onclick="resetDemoData()" class="w-full text-left px-4 py-1.5 text-xs text-rose-600 hover:bg-rose-50 flex items-center gap-2">
-                <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Reset All Demo Data
-              </button>
-            </div>
+          <!-- User State Container -->
+          <div id="auth-nav-container">
+            <!-- Injected via JS: Either Logged-In User Profile or Sign In / Register Buttons -->
           </div>
 
           <!-- Mobile Menu Button -->
@@ -195,7 +157,7 @@
         <i data-lucide="layout-dashboard" class="w-4 h-4"></i> Dashboard
       </button>
       <button onclick="navigate('admin'); toggleMobileMenu()" class="w-full text-left px-3 py-2 rounded-md text-slate-400 hover:bg-slate-800 flex items-center gap-2">
-        <i data-lucide="shield" class="w-4 h-4"></i> Admin Moderation
+        <i data-lucide="shield" class="w-4 h-4"></i> Security & Admin
       </button>
     </div>
   </header>
@@ -204,6 +166,83 @@
   <main id="app-container" class="flex-grow">
     <!-- View will be rendered dynamically by JavaScript -->
   </main>
+
+  <!-- Real Authentication Modal (Sign In & Register) -->
+  <div id="auth-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 sm:p-8 shadow-2xl relative my-8">
+      <button onclick="closeAuthModal()" class="absolute top-5 right-5 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-blue-600 text-white flex items-center justify-center mx-auto mb-3 shadow-md shadow-blue-500/20">
+          <i data-lucide="shield-check" class="w-7 h-7"></i>
+        </div>
+        <h3 id="auth-title" class="text-xl font-bold text-slate-900">Sign in to CampusFind</h3>
+        <p class="text-xs text-slate-500 mt-1">Official Apex University Single Sign-On Portal</p>
+      </div>
+
+      <!-- Tab Buttons -->
+      <div class="flex border-b border-slate-200 mb-5">
+        <button id="tab-login" onclick="setAuthTab('login')" class="flex-1 py-2 text-xs font-bold text-blue-600 border-b-2 border-blue-600">
+          Sign In
+        </button>
+        <button id="tab-register" onclick="setAuthTab('register')" class="flex-1 py-2 text-xs font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent">
+          Create Account
+        </button>
+      </div>
+
+      <!-- Sign In Form -->
+      <form id="login-form" onsubmit="handleAuthLogin(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">University Email</label>
+          <input type="email" id="login-email" required placeholder="student@apex.edu" 
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Password</label>
+          <input type="password" id="login-password" required placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" 
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm transition">
+          Sign In
+        </button>
+        <div class="text-[11px] text-center text-slate-400 pt-1">
+          Sign in with your university account or create a new student profile.
+        </div>
+      </form>
+
+      <!-- Register Form -->
+      <form id="register-form" onsubmit="handleAuthRegister(event)" class="space-y-3.5 hidden">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Full Name</label>
+          <input type="text" id="register-name" required placeholder="e.g. Jordan Miller" 
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Campus Email (@apex.edu)</label>
+          <input type="email" id="register-email" required placeholder="jordan.m@apex.edu" 
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Department / Campus Role</label>
+          <select id="register-role" class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm bg-white">
+            <option value="student">Undergraduate Student</option>
+            <option value="student">Graduate / Research Scholar</option>
+            <option value="staff">Faculty / University Staff</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Create Password</label>
+          <input type="password" id="register-password" required minlength="6" placeholder="At least 6 characters" 
+            class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500">
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-lg shadow-sm transition">
+          Register Student Account
+        </button>
+      </form>
+    </div>
+  </div>
 
   <!-- Report Item Modal (Lost & Found) -->
   <div id="report-modal" class="fixed inset-0 z-50 hidden bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -218,7 +257,7 @@
         </div>
         <div>
           <h3 id="modal-title" class="text-xl font-bold text-slate-900">Report an Item</h3>
-          <p id="modal-subtitle" class="text-xs text-slate-500">Provide accurate details to facilitate quick recovery.</p>
+          <p id="modal-subtitle" class="text-xs text-slate-500">Provide accurate details to facilitate recovery.</p>
         </div>
       </div>
 
@@ -269,14 +308,14 @@
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Specific Room / Spot</label>
-            <input type="text" id="report-specific-location" placeholder="e.g. 2nd Floor Silent Study Booth #14" 
+            <input type="text" id="report-specific-location" placeholder="e.g. 2nd Floor Study Booth #14" 
               class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm">
           </div>
         </div>
 
         <div>
           <label class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">Public Description *</label>
-          <textarea id="report-description" rows="3" required placeholder="Describe appearance, general color, condition. Do NOT disclose secret identifying marks if this is a found item." 
+          <textarea id="report-description" rows="3" required placeholder="Describe appearance, general color, and condition. Do NOT disclose secret identifying marks if this is a found item." 
             class="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"></textarea>
         </div>
 
@@ -403,7 +442,7 @@
           <span>CampusFind</span>
         </div>
         <p class="text-xs text-slate-400 leading-relaxed mb-3">
-          Apex University's official student recovery hub. Safeguarding personal property, eliminating lost item fraud, and facilitating honest returns.
+          Apex University official student recovery hub. Safeguarding personal property, eliminating lost item fraud, and facilitating honest returns.
         </p>
         <div class="text-xs text-slate-500">
           &copy; 2026 Apex University Student Council & Campus Safety.
@@ -440,7 +479,7 @@
       </div>
 
       <div>
-        <h4 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">Quick Actions</h4>
+        <h4 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">Quick Navigation</h4>
         <div class="space-y-2">
           <button onclick="openReportModal('LOST')" class="w-full text-left px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs flex items-center justify-between">
             <span>Report Lost Belonging</span>
@@ -450,9 +489,9 @@
             <span>Report Found Belonging</span>
             <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
           </button>
-          <button onclick="resetDemoData()" class="w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:text-rose-400 flex items-center gap-1.5">
-            <i data-lucide="refresh-cw" class="w-3 h-3"></i>
-            <span>Reset Demo Seed State</span>
+          <button onclick="navigate('browse')" class="w-full text-left px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs flex items-center justify-between">
+            <span>Browse All Listings</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
           </button>
         </div>
       </div>
